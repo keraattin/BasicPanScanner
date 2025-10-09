@@ -42,7 +42,13 @@ func validateDirectory(dirPath string) error {
 	return nil
 }
 
-// findCardNumber searches for 16 consecutive digits in a string
+// findCardNumber searches for credit card patterns (13-19 consecutive digits)
+// Different card types have different lengths:
+// - Visa: 13, 16, or 19 digits
+// - MasterCard: 16 digits
+// - Amex: 15 digits
+// - Discover: 16 digits
+// - Diners: 14 digits
 // It handles common formats like spaces and dashes between digit groups
 func findCardNumber(text string) string {
 	consecutiveDigits := ""
@@ -55,8 +61,18 @@ func findCardNumber(text string) string {
 			// Found a digit, add it to our collection
 			consecutiveDigits = consecutiveDigits + string(char)
 
-			// Check if we've found exactly 16 digits
-			if len(consecutiveDigits) == 16 {
+			// Check if we have a valid card length (13-19 digits)
+			length := len(consecutiveDigits)
+
+			// If we have between 13-19 digits, check what comes next
+			if length >= 13 && length <= 19 {
+				// Look ahead to see if there are more digits
+				if i+1 < len(text) && text[i+1] >= '0' && text[i+1] <= '9' {
+					// More digits coming, keep collecting
+					continue
+				}
+
+				// No more digits, return what we have if it's valid length
 				return consecutiveDigits
 			}
 
@@ -70,11 +86,24 @@ func findCardNumber(text string) string {
 
 		} else {
 			// Any other character breaks the sequence
+			// Check if we had a valid length before resetting
+			length := len(consecutiveDigits)
+			if length >= 13 && length <= 19 {
+				return consecutiveDigits
+			}
+
+			// Reset for next potential card
 			consecutiveDigits = ""
 		}
 	}
 
-	// No 16-digit sequence found
+	// Check final collection at end of string
+	length := len(consecutiveDigits)
+	if length >= 13 && length <= 19 {
+		return consecutiveDigits
+	}
+
+	// No valid card number found
 	return ""
 }
 
@@ -236,8 +265,10 @@ func validateLuhn(cardNumber string) bool {
 
 // getCardType identifies the card issuer based on the card number
 func getCardType(cardNumber string) string {
-	// Ensure we have enough digits to check
-	if len(cardNumber) < 13 {
+	length := len(cardNumber)
+
+	// Check length is valid for cards
+	if length < 13 || length > 19 {
 		return "Unknown"
 	}
 
@@ -249,37 +280,55 @@ func getCardType(cardNumber string) string {
 		firstFour = cardNumber[0:4]
 	}
 
-	// Visa: Starts with 4
+	// Visa: Starts with 4 (13, 16, or 19 digits)
 	if firstDigit == '4' {
-		return "Visa"
+		if length == 13 || length == 16 || length == 19 {
+			return "Visa"
+		}
+		return "Unknown" // Wrong length for Visa
 	}
 
-	// MasterCard: Starts with 51-55 or 2221-2720
+	// MasterCard: Starts with 51-55 or 2221-2720 (16 digits only)
 	if (firstTwo >= "51" && firstTwo <= "55") ||
 		(firstFour >= "2221" && firstFour <= "2720") {
-		return "MasterCard"
+		if length == 16 {
+			return "MasterCard"
+		}
+		return "Unknown" // Wrong length for MasterCard
 	}
 
-	// American Express: Starts with 34 or 37
+	// American Express: Starts with 34 or 37 (15 digits only)
 	if firstTwo == "34" || firstTwo == "37" {
-		return "Amex"
+		if length == 15 {
+			return "Amex"
+		}
+		return "Unknown" // Wrong length for Amex
 	}
 
-	// Discover: Starts with 6011, 622126-622925, 644-649, 65
+	// Discover: Starts with 6011, 644-649, 65 (16 digits only)
 	if firstFour == "6011" ||
 		(firstTwo >= "64" && firstTwo <= "65") {
-		return "Discover"
+		if length == 16 {
+			return "Discover"
+		}
+		return "Unknown"
 	}
 
-	// JCB: Starts with 3528-3589
-	if firstFour >= "3528" && firstFour <= "3589" {
-		return "JCB"
-	}
-
-	// Diners Club: Starts with 36, 38, or 300-305
+	// Diners Club: Starts with 36, 38, or 300-305 (14 digits)
 	if firstTwo == "36" || firstTwo == "38" ||
 		(firstFour >= "3000" && firstFour <= "3059") {
-		return "Diners"
+		if length == 14 {
+			return "Diners"
+		}
+		return "Unknown"
+	}
+
+	// JCB: Starts with 3528-3589 (16 digits)
+	if firstFour >= "3528" && firstFour <= "3589" {
+		if length == 16 {
+			return "JCB"
+		}
+		return "Unknown"
 	}
 
 	return "Unknown"
