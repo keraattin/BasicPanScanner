@@ -51,6 +51,38 @@ func findCardNumber(text string) string {
 	return "" // No card found
 }
 
+func scanFile(filepath string) {
+	fmt.Printf("Scanning file: %s\n", filepath)
+
+	// Open the file
+	file, err := os.Open(filepath)
+	if err != nil {
+		fmt.Printf("Error opening file: %s\n", err)
+		return
+	}
+	defer file.Close() // Make sure file gets closed
+
+	// Create a scanner to read line by line
+	scanner := bufio.NewScanner(file)
+	lineNumber := 0
+	foundCount := 0
+
+	// Read each line
+	for scanner.Scan() {
+		lineNumber++
+		line := scanner.Text()
+
+		// Check this line for cards
+		cardNumber := findCardNumber(line)
+		if cardNumber != "" {
+			foundCount++
+			fmt.Printf("  Line %d: FOUND CARD: %s\n", lineNumber, cardNumber)
+		}
+	}
+
+	fmt.Printf("Scan complete. Found %d potential cards.\n\n", foundCount)
+}
+
 func main() {
 	// Declare a variable to hold version number
 	var version string = "0.01"
@@ -69,5 +101,6 @@ func main() {
 		fmt.Println("⚠️ Warning: Scanning root directory can take a long time!")
 	} else {
 		fmt.Println("✓ Path to scan:", scanPath)
+		scanFile(scanPath) // Do the scan
 	}
 }
