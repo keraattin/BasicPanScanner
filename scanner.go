@@ -18,69 +18,81 @@ func getPathFromUser() string {
 	return path
 }
 
-// Searching 16 Length digits for possible card data
+// findCardNumber searches for 16 consecutive digits in a string
+// It handles common formats like spaces and dashes between digit groups
 func findCardNumber(text string) string {
 	consecutiveDigits := ""
 
+	// Iterate through each character in the text
 	for i := 0; i < len(text); i++ {
 		char := text[i]
 
 		if char >= '0' && char <= '9' {
-			// Add digit to our string
+			// Found a digit, add it to our collection
 			consecutiveDigits = consecutiveDigits + string(char)
 
-			// Check if we found 16 digits
+			// Check if we've found exactly 16 digits
 			if len(consecutiveDigits) == 16 {
 				return consecutiveDigits
 			}
 
 		} else if char == ' ' || char == '-' {
-			// Space or dash - keep going if we have digits
+			// Space or dash - could be formatting in a card number
+			// Only reset if we haven't started collecting digits
 			if len(consecutiveDigits) == 0 {
-				// No digits yet, ignore this space/dash
 				consecutiveDigits = ""
 			}
-			// If we have digits, don't reset! Just skip the space/dash
+			// Otherwise, continue collecting (skip the separator)
 
 		} else {
-			// Any other character - reset
+			// Any other character breaks the sequence
 			consecutiveDigits = ""
 		}
 	}
 
-	return "" // No card found
+	// No 16-digit sequence found
+	return ""
 }
 
-func scanFile(filepath string) {
+// scanFile reads a file line by line and checks for credit card patterns
+func scanFile(filepath string) error {
 	fmt.Printf("Scanning file: %s\n", filepath)
 
-	// Open the file
+	// Attempt to open the file
 	file, err := os.Open(filepath)
 	if err != nil {
-		fmt.Printf("Error opening file: %s\n", err)
-		return
+		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close() // Make sure file gets closed
+	// Ensure file is closed when function exits
+	defer file.Close()
 
-	// Create a scanner to read line by line
+	// Create a scanner for line-by-line reading
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	foundCount := 0
 
-	// Read each line
+	// Process each line
 	for scanner.Scan() {
 		lineNumber++
 		line := scanner.Text()
 
-		// Check this line for cards
+		// Check current line for card patterns
 		cardNumber := findCardNumber(line)
 		if cardNumber != "" {
 			foundCount++
+			// In production, we'd hash the card number instead of printing it
 			fmt.Printf("  Line %d: FOUND CARD: %s\n", lineNumber, cardNumber)
 		}
 	}
 
+	// Check for scanning errors
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading file: %w", err)
+	}
+
+	// Print summary
 	fmt.Printf("Scan complete. Found %d potential cards.\n\n", foundCount)
+	return nil
 }
 
 func main() {
