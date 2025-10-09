@@ -8,15 +8,21 @@ import (
 	"strings"
 )
 
-// Get Path From User
-func getPathFromUser() string {
+// getDirectoryFromUser prompts user for a directory path
+func getDirectoryFromUser() string {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Print("Enter path to scan: ")
-	path, _ := reader.ReadString('\n')
-	path = strings.TrimSpace(path)
+	fmt.Print("Enter directory to scan (or press Enter for current): ")
+	dirPath, _ := reader.ReadString('\n')
+	dirPath = strings.TrimSpace(dirPath)
 
-	return path
+	// Default to current directory if empty
+	if dirPath == "" {
+		dirPath = "."
+		fmt.Println("Using current directory")
+	}
+
+	return dirPath
 }
 
 // findCardNumber searches for 16 consecutive digits in a string
@@ -159,7 +165,7 @@ func main() {
 	fmt.Println("Author:", author)
 
 	// Get the Scan Path
-	scanPath := getPathFromUser()
+	scanPath := getDirectoryFromUser()
 
 	if scanPath == "" {
 		fmt.Println("❌ Error: No path provided!")
