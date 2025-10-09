@@ -162,7 +162,11 @@ func scanFile(filepath string) error {
 			// Validate with Luhn algorithm
 			if validateLuhn(cardNumber) {
 				validCount++
-				fmt.Printf("  Line %d: VALID CARD: %s ✓\n", lineNumber, cardNumber)
+
+				// Get and display card type
+				cardType := getCardType(cardNumber)
+
+				fmt.Printf("  Line %d: %s card: %s ✓\n", lineNumber, cardType, cardNumber)
 			} else {
 				fmt.Printf("  Line %d: Invalid pattern: %s (failed Luhn check)\n", lineNumber, cardNumber)
 			}
@@ -225,6 +229,57 @@ func validateLuhn(cardNumber string) bool {
 
 	// Valid if sum is divisible by 10
 	return sum%10 == 0
+}
+
+// getCardType identifies the card issuer based on the card number
+func getCardType(cardNumber string) string {
+	// Ensure we have enough digits to check
+	if len(cardNumber) < 13 {
+		return "Unknown"
+	}
+
+	// Check first digits for card type
+	firstDigit := cardNumber[0]
+	firstTwo := cardNumber[0:2]
+	firstFour := ""
+	if len(cardNumber) >= 4 {
+		firstFour = cardNumber[0:4]
+	}
+
+	// Visa: Starts with 4
+	if firstDigit == '4' {
+		return "Visa"
+	}
+
+	// MasterCard: Starts with 51-55 or 2221-2720
+	if (firstTwo >= "51" && firstTwo <= "55") ||
+		(firstFour >= "2221" && firstFour <= "2720") {
+		return "MasterCard"
+	}
+
+	// American Express: Starts with 34 or 37
+	if firstTwo == "34" || firstTwo == "37" {
+		return "Amex"
+	}
+
+	// Discover: Starts with 6011, 622126-622925, 644-649, 65
+	if firstFour == "6011" ||
+		(firstTwo >= "64" && firstTwo <= "65") {
+		return "Discover"
+	}
+
+	// JCB: Starts with 3528-3589
+	if firstFour >= "3528" && firstFour <= "3589" {
+		return "JCB"
+	}
+
+	// Diners Club: Starts with 36, 38, or 300-305
+	if firstTwo == "36" || firstTwo == "38" ||
+		(firstFour >= "3000" && firstFour <= "3059") {
+		return "Diners"
+	}
+
+	return "Unknown"
 }
 
 func main() {
