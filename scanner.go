@@ -6,6 +6,7 @@ import (
 	"os"    // operating system stuff (Stdin)
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // getDirectoryFromUser prompts user for a directory path
@@ -362,14 +363,28 @@ func maskCardNumber(cardNumber string) string {
 	return masked
 }
 
-func main() {
-	// Declare a variable to hold version number
-	var version string = "0.01"
-	author := "@keraattin"
+func displayBanner() {
+	fmt.Println(`
+    ╔══════════════════════════════════════════════════════════╗
+    ║                                                          ║
+    ║     BasicPanScanner - PCI Compliance Tool                ║
+    ║     ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                  ║
+    ║     Version: 1.0.0                                       ║
+    ║     Author:  @keraattin                                  ║
+    ║     Purpose: Detect credit card data in files            ║
+    ║                                                          ║
+    ║     [████ ████ ████ ████] Card Detection Active          ║
+    ║                                                          ║
+    ╚══════════════════════════════════════════════════════════╝
+    `)
+}
 
-	fmt.Println("PCI Scanner Starting...")
-	fmt.Println("Version:", version)
-	fmt.Println("Author:", author)
+func main() {
+	// Display banner
+	displayBanner()
+
+	// Small delay for effect
+	time.Sleep(1 * time.Second)
 
 	// Get directory from user
 	dirPath := getDirectoryFromUser()
