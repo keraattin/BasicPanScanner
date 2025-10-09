@@ -4,6 +4,7 @@ import (
 	"bufio" // buffered I/O for reading input
 	"fmt"   // for printing
 	"os"    // operating system stuff (Stdin)
+	"strings"
 )
 
 func main() {
@@ -27,6 +28,14 @@ func main() {
 	// Read the input
 	path, _ := reader.ReadString('\n')
 
-	// Show what we got
-	fmt.Println("You want to scan:", path)
+	// Clean up the input (remove newline and spaces)
+	path = strings.TrimSpace(path)
+
+	if path == "" {
+		fmt.Println("❌ Error: No path provided!")
+	} else if path == "/" {
+		fmt.Println("⚠️ Warning: Scanning root directory can take a long time!")
+	} else {
+		fmt.Println("✓ Path to scan:", path)
+	}
 }
