@@ -4,6 +4,7 @@ import (
 	"bufio" // buffered I/O for reading input
 	"fmt"   // for printing
 	"os"    // operating system stuff (Stdin)
+	"path/filepath"
 	"strings"
 )
 
@@ -52,6 +53,59 @@ func findCardNumber(text string) string {
 
 	// No 16-digit sequence found
 	return ""
+}
+
+// scanDirectory walks through a directory and scans all .txt and .log files
+func scanDirectory(dirPath string) error {
+	fmt.Printf("Scanning directory: %s\n", dirPath)
+	fmt.Println("=" + strings.Repeat("=", 40))
+
+	totalFiles := 0
+	scannedFiles := 0
+
+	// Walk through the directory tree
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		// Check for walk errors
+		if err != nil {
+			fmt.Printf("Error accessing path %s: %v\n", path, err)
+			return nil // Continue walking despite error
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		totalFiles++
+
+		// Get file extension
+		ext := filepath.Ext(path)
+
+		// Only scan text-like files
+		if ext == ".txt" || ext == ".log" || ext == ".csv" {
+			scannedFiles++
+
+			// Scan this file
+			err := scanFile(path)
+			if err != nil {
+				fmt.Printf("Error scanning %s: %v\n", path, err)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("directory walk failed: %w", err)
+	}
+
+	// Print summary
+	fmt.Println("=" + strings.Repeat("=", 40))
+	fmt.Printf("Directory scan complete\n")
+	fmt.Printf("Total files found: %d\n", totalFiles)
+	fmt.Printf("Files scanned: %d\n", scannedFiles)
+
+	return nil
 }
 
 // scanFile reads a file line by line and checks for credit card patterns
