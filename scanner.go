@@ -25,6 +25,23 @@ func getDirectoryFromUser() string {
 	return dirPath
 }
 
+// validateDirectory checks if the path exists and is a directory
+func validateDirectory(dirPath string) error {
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("directory does not exist: %s", dirPath)
+		}
+		return fmt.Errorf("error accessing directory: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", dirPath)
+	}
+
+	return nil
+}
+
 // findCardNumber searches for 16 consecutive digits in a string
 // It handles common formats like spaces and dashes between digit groups
 func findCardNumber(text string) string {
