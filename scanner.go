@@ -29,12 +29,21 @@ func findCardNumber(text string) string {
 			// Add digit to our string
 			consecutiveDigits = consecutiveDigits + string(char)
 
-			// Check if we found 16 digits!
+			// Check if we found 16 digits
 			if len(consecutiveDigits) == 16 {
-				return consecutiveDigits // Found a card!
+				return consecutiveDigits
 			}
+
+		} else if char == ' ' || char == '-' {
+			// Space or dash - keep going if we have digits
+			if len(consecutiveDigits) == 0 {
+				// No digits yet, ignore this space/dash
+				consecutiveDigits = ""
+			}
+			// If we have digits, don't reset! Just skip the space/dash
+
 		} else {
-			// Not a digit - reset
+			// Any other character - reset
 			consecutiveDigits = ""
 		}
 	}
