@@ -18,6 +18,30 @@ func getPathFromUser() string {
 	return path
 }
 
+// Searching 16 Length digits for possible card data
+func findCardNumber(text string) string {
+	consecutiveDigits := ""
+
+	for i := 0; i < len(text); i++ {
+		char := text[i]
+
+		if char >= '0' && char <= '9' {
+			// Add digit to our string
+			consecutiveDigits = consecutiveDigits + string(char)
+
+			// Check if we found 16 digits!
+			if len(consecutiveDigits) == 16 {
+				return consecutiveDigits // Found a card!
+			}
+		} else {
+			// Not a digit - reset
+			consecutiveDigits = ""
+		}
+	}
+
+	return "" // No card found
+}
+
 func main() {
 	// Declare a variable to hold version number
 	var version string = "0.01"
