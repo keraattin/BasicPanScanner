@@ -147,6 +147,7 @@ func scanFile(filepath string) error {
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	foundCount := 0
+	validCount := 0 // Track valid cards
 
 	// Process each line
 	for scanner.Scan() {
@@ -157,8 +158,14 @@ func scanFile(filepath string) error {
 		cardNumber := findCardNumber(line)
 		if cardNumber != "" {
 			foundCount++
-			// In production, we'd hash the card number instead of printing it
-			fmt.Printf("  Line %d: FOUND CARD: %s\n", lineNumber, cardNumber)
+
+			// Validate with Luhn algorithm
+			if validateLuhn(cardNumber) {
+				validCount++
+				fmt.Printf("  Line %d: VALID CARD: %s ✓\n", lineNumber, cardNumber)
+			} else {
+				fmt.Printf("  Line %d: Invalid pattern: %s (failed Luhn check)\n", lineNumber, cardNumber)
+			}
 		}
 	}
 
@@ -167,9 +174,57 @@ func scanFile(filepath string) error {
 		return fmt.Errorf("error reading file: %w", err)
 	}
 
-	// Print summary
-	fmt.Printf("Scan complete. Found %d potential cards.\n\n", foundCount)
+	// Print summary with validation info
+	fmt.Printf("Scan complete. Found %d patterns, %d valid cards.\n\n", foundCount, validCount)
 	return nil
+}
+
+//How Luhn Algorithm Works:
+// - Start from the rightmost digit
+// - Double every second digit (from right)
+// - If doubled value > 9, subtract 9
+// - Sum all digits
+// - Valid if sum is divisible by 10
+
+// validate Luhn checks if a card number passes the Luhn algorithm
+// This is a checksum formula used to validate credit card numbers
+func validateLuhn(cardNumber string) bool {
+	// Remove any spaces or dashes that might still be in the number
+	cleaned := ""
+	for i := 0; i < len(cardNumber); i++ {
+		if cardNumber[i] >= '0' && cardNumber[i] <= '9' {
+			cleaned += string(cardNumber[i])
+		}
+	}
+
+	// Need at least 13 digits for a valid card (some cards are 13-19 digits)
+	if len(cleaned) < 13 || len(cleaned) > 19 {
+		return false
+	}
+
+	sum := 0
+	isEven := false
+
+	// Process digits from right to left
+	for i := len(cleaned) - 1; i >= 0; i-- {
+		// Convert character to integer
+		digit := int(cleaned[i] - '0')
+
+		// Every second digit (from right) is doubled
+		if isEven {
+			digit *= 2
+			// If doubled digit is > 9, subtract 9
+			if digit > 9 {
+				digit -= 9
+			}
+		}
+
+		sum += digit
+		isEven = !isEven
+	}
+
+	// Valid if sum is divisible by 10
+	return sum%10 == 0
 }
 
 func main() {
