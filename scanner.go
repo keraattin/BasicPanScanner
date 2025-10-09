@@ -181,15 +181,19 @@ func main() {
 	fmt.Println("Version:", version)
 	fmt.Println("Author:", author)
 
-	// Get the Scan Path
-	scanPath := getDirectoryFromUser()
+	// Get directory from user
+	dirPath := getDirectoryFromUser()
 
-	if scanPath == "" {
-		fmt.Println("❌ Error: No path provided!")
-	} else if scanPath == "/" {
-		fmt.Println("⚠️ Warning: Scanning root directory can take a long time!")
-	} else {
-		fmt.Println("✓ Path to scan:", scanPath)
-		scanFile(scanPath) // Do the scan
+	// Validate the directory
+	err := validateDirectory(dirPath)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	// Scan the directory
+	err = scanDirectory(dirPath)
+	if err != nil {
+		fmt.Printf("Scan failed: %v\n", err)
 	}
 }
