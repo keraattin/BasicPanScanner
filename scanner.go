@@ -102,7 +102,7 @@ func scanDirectory(dirPath string) error {
 		totalFiles++
 
 		// Get file extension
-		ext := filepath.Ext(path)
+		ext := strings.ToLower(filepath.Ext(path))
 
 		// Only scan text-like files
 		if ext == ".txt" || ext == ".log" || ext == ".csv" {
