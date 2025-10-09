@@ -166,7 +166,10 @@ func scanFile(filepath string) error {
 				// Get and display card type
 				cardType := getCardType(cardNumber)
 
-				fmt.Printf("  Line %d: %s card: %s ✓\n", lineNumber, cardType, cardNumber)
+				// Mask the card number for safe display
+				maskedCard := maskCardNumber(cardNumber)
+
+				fmt.Printf("  Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
 			} else {
 				fmt.Printf("  Line %d: Invalid pattern: %s (failed Luhn check)\n", lineNumber, cardNumber)
 			}
@@ -280,6 +283,34 @@ func getCardType(cardNumber string) string {
 	}
 
 	return "Unknown"
+}
+
+// maskCardNumber returns a masked version for safe display
+// PCI compliance: Shows only first 6 (BIN) and last 4 digits
+func maskCardNumber(cardNumber string) string {
+	length := len(cardNumber)
+
+	// If card number is too short, just return it
+	if length <= 10 {
+		return cardNumber
+	}
+
+	// Build masked number
+	masked := ""
+
+	// Add first 6 digits (BIN - Bank Identification Number)
+	masked += cardNumber[0:6]
+
+	// Add asterisks for middle digits
+	middleDigits := length - 10 // Total minus first 6 and last 4
+	for i := 0; i < middleDigits; i++ {
+		masked += "*"
+	}
+
+	// Add last 4 digits
+	masked += cardNumber[length-4:]
+
+	return masked
 }
 
 func main() {
