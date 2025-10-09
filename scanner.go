@@ -7,6 +7,17 @@ import (
 	"strings"
 )
 
+// Get Path From User
+func getPathFromUser() string {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Enter path to scan: ")
+	path, _ := reader.ReadString('\n')
+	path = strings.TrimSpace(path)
+
+	return path
+}
+
 func main() {
 	// Declare a variable to hold version number
 	var version string = "0.01"
@@ -16,26 +27,14 @@ func main() {
 	fmt.Println("Version:", version)
 	fmt.Println("Author:", author)
 
-	// Create a scanner to read input
-	reader := bufio.NewReader(os.Stdin)
+	// Get the Scan Path
+	scanPath := getPathFromUser()
 
-	fmt.Println("PCI Scanner Setup")
-	fmt.Println("-----------------")
-
-	// Ask for input
-	fmt.Print("Enter path to scan: ")
-
-	// Read the input
-	path, _ := reader.ReadString('\n')
-
-	// Clean up the input (remove newline and spaces)
-	path = strings.TrimSpace(path)
-
-	if path == "" {
+	if scanPath == "" {
 		fmt.Println("❌ Error: No path provided!")
-	} else if path == "/" {
+	} else if scanPath == "/" {
 		fmt.Println("⚠️ Warning: Scanning root directory can take a long time!")
 	} else {
-		fmt.Println("✓ Path to scan:", path)
+		fmt.Println("✓ Path to scan:", scanPath)
 	}
 }
