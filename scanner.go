@@ -108,23 +108,26 @@ func findCardNumber(text string) string {
 	return ""
 }
 
-// scanDirectory walks through a directory and scans all .txt and .log files
+// scanDirectory - Single pass version, more efficient
 func scanDirectory(dirPath string) error {
-	fmt.Printf("Scanning directory: %s\n", dirPath)
-	fmt.Println("=" + strings.Repeat("=", 40))
+	fmt.Printf("\nScanning directory: %s\n", dirPath)
+	fmt.Println(strings.Repeat("=", 50))
 
+	// Single pass - no pre-counting
+	startTime := time.Now()
 	totalFiles := 0
 	scannedFiles := 0
+	foundCards := 0
 
-	// Walk through the directory tree
+	// Progress indicator without knowing total
+	lastUpdate := time.Now()
+
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		// Check for walk errors
 		if err != nil {
 			fmt.Printf("Error accessing path %s: %v\n", path, err)
-			return nil // Continue walking despite error
+			return nil
 		}
 
-		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
@@ -138,46 +141,64 @@ func scanDirectory(dirPath string) error {
 		if ext == ".txt" || ext == ".log" || ext == ".csv" {
 			scannedFiles++
 
-			// Scan this file
-			err := scanFile(path)
-			if err != nil {
-				fmt.Printf("Error scanning %s: %v\n", path, err)
+			// Update progress every 100ms (not every file)
+			if time.Since(lastUpdate) > 100*time.Millisecond {
+				fmt.Printf("\r[Scanning... Files checked: %d, Scanned: %d, Cards found: %d]",
+					totalFiles, scannedFiles, foundCards)
+				lastUpdate = time.Now()
+			}
+
+			// Scan the file
+			cardsFound := scanFileWithCount(path)
+			if cardsFound > 0 {
+				foundCards += cardsFound
+				// Show files with findings immediately
+				fmt.Printf("\n✓ Found %d cards in: %s\n", cardsFound, filepath.Base(path))
 			}
 		}
 
 		return nil
 	})
 
+	// Clear the progress line
+	fmt.Print("\r" + strings.Repeat(" ", 70) + "\r")
+
 	if err != nil {
 		return fmt.Errorf("directory walk failed: %w", err)
 	}
 
+	elapsed := time.Since(startTime)
+
 	// Print summary
-	fmt.Println("=" + strings.Repeat("=", 40))
-	fmt.Printf("Directory scan complete\n")
-	fmt.Printf("Total files found: %d\n", totalFiles)
-	fmt.Printf("Files scanned: %d\n", scannedFiles)
+	fmt.Println("\n" + strings.Repeat("=", 50))
+	fmt.Printf("✓ Directory scan complete!\n")
+	fmt.Printf("  Time taken: %s\n", elapsed.Round(time.Second))
+	fmt.Printf("  Total files: %d\n", totalFiles)
+	fmt.Printf("  Files scanned: %d\n", scannedFiles)
+	fmt.Printf("  Cards found: %d\n", foundCards)
+
+	if elapsed.Seconds() > 0 {
+		rate := float64(scannedFiles) / elapsed.Seconds()
+		fmt.Printf("  Scan rate: %.1f files/second\n", rate)
+	}
 
 	return nil
 }
 
-// scanFile reads a file line by line and checks for credit card patterns
-func scanFile(filepath string) error {
-	fmt.Printf("Scanning file: %s\n", filepath)
-
-	// Attempt to open the file
+// scanFileWithCount scans a file and returns number of valid cards found
+func scanFileWithCount(filepath string) int {
+	// Open the file
 	file, err := os.Open(filepath)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		fmt.Printf("    Error: %v\n", err)
+		return 0
 	}
-	// Ensure file is closed when function exits
 	defer file.Close()
 
 	// Create a scanner for line-by-line reading
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
-	foundCount := 0
-	validCount := 0 // Track valid cards
+	validCount := 0
 
 	// Process each line
 	for scanner.Scan() {
@@ -187,33 +208,27 @@ func scanFile(filepath string) error {
 		// Check current line for card patterns
 		cardNumber := findCardNumber(line)
 		if cardNumber != "" {
-			foundCount++
-
 			// Validate with Luhn algorithm
 			if validateLuhn(cardNumber) {
 				validCount++
 
-				// Get and display card type
+				// Get card type
 				cardType := getCardType(cardNumber)
 
 				// Mask the card number for safe display
 				maskedCard := maskCardNumber(cardNumber)
 
-				fmt.Printf("  Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
-			} else {
-				fmt.Printf("  Line %d: Invalid pattern: %s (failed Luhn check)\n", lineNumber, cardNumber)
+				fmt.Printf("    Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
 			}
 		}
 	}
 
-	// Check for scanning errors
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("error reading file: %w", err)
+	// Only show summary if cards were found
+	if validCount > 0 {
+		fmt.Printf("    → Found %d valid cards\n", validCount)
 	}
 
-	// Print summary with validation info
-	fmt.Printf("Scan complete. Found %d patterns, %d valid cards.\n\n", foundCount, validCount)
-	return nil
+	return validCount
 }
 
 //How Luhn Algorithm Works:
