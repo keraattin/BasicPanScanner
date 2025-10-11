@@ -3,6 +3,7 @@ package main
 import (
 	"bufio" // buffered I/O for reading input
 	"encoding/csv"
+	"encoding/json"
 	"flag"
 	"fmt" // for printing
 	"os"  // operating system stuff (Stdin)
@@ -10,6 +11,122 @@ import (
 	"strings"
 	"time"
 )
+
+// Report is the common structure for all export formats
+type Report struct {
+	ScanDate     time.Time
+	Directory    string
+	Extensions   []string
+	Duration     time.Duration
+	TotalFiles   int
+	ScannedFiles int
+	Findings     []CardFinding
+}
+
+// CardFinding represents a single credit card finding
+type CardFinding struct {
+	FilePath   string
+	LineNumber int
+	CardType   string
+	MaskedCard string
+	Timestamp  time.Time
+}
+
+// Global report variable
+var currentReport *Report
+
+// initReport initializes a new report
+func initReport(directory string, extensions []string) {
+	currentReport = &Report{
+		ScanDate:   time.Now(),
+		Directory:  directory,
+		Extensions: extensions,
+		Findings:   []CardFinding{},
+	}
+}
+
+// addFinding adds a finding to the current report
+func addFinding(filepath string, lineNumber int, cardType string, maskedCard string) {
+	if currentReport == nil {
+		return
+	}
+
+	finding := CardFinding{
+		FilePath:   filepath,
+		LineNumber: lineNumber,
+		CardType:   cardType,
+		MaskedCard: maskedCard,
+		Timestamp:  time.Now(),
+	}
+
+	currentReport.Findings = append(currentReport.Findings, finding)
+}
+
+// finalizeReport sets the final statistics
+func finalizeReport(totalFiles int, scannedFiles int, duration time.Duration) {
+	if currentReport == nil {
+		return
+	}
+
+	currentReport.TotalFiles = totalFiles
+	currentReport.ScannedFiles = scannedFiles
+	currentReport.Duration = duration
+}
+
+// exportReport exports the report in the requested format
+func exportReport(filename string) error {
+	if currentReport == nil {
+		return fmt.Errorf("no report to export")
+	}
+
+	ext := strings.ToLower(filepath.Ext(filename))
+
+	switch ext {
+	case ".json":
+		return exportJSON(filename)
+	case ".csv":
+		return exportCSV(filename)
+	default:
+		return fmt.Errorf("unsupported format: %s", ext)
+	}
+}
+
+// exportJSON exports report as JSON
+func exportJSON(filename string) error {
+	data, err := json.MarshalIndent(currentReport, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, data, 0644)
+}
+
+// exportCSV exports report as CSV
+func exportCSV(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	writer.Write([]string{"File", "Line", "Card Type", "Masked Card", "Timestamp"})
+
+	// Write findings
+	for _, f := range currentReport.Findings {
+		writer.Write([]string{
+			f.FilePath,
+			fmt.Sprintf("%d", f.LineNumber),
+			f.CardType,
+			f.MaskedCard,
+			f.Timestamp.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	return nil
+}
 
 // validateDirectory checks if the path exists and is a directory
 func validateDirectory(dirPath string) error {
@@ -98,40 +215,32 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
 	fmt.Println(strings.Repeat("=", 50))
 
-	// Create CSV file if output requested
-	var csvWriter *csv.Writer
-	var csvFile *os.File
+	// Initialize report
+	initReport(dirPath, extensions)
 
-	if outputFile != "" {
-		var err error
-		csvWriter, csvFile, err = createCSVFile(outputFile)
-		if err != nil {
-			fmt.Printf("Error creating CSV file: %v\n", err)
-			return err
-		}
-		defer csvFile.Close()
-	}
-
-	// Rest of the existing scanning code...
 	startTime := time.Now()
 	totalFiles := 0
 	scannedFiles := 0
 	foundCards := 0
 
+	// Progress indicator
 	lastUpdate := time.Now()
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		// Handle walk errors
 		if err != nil {
 			fmt.Printf("Error accessing path %s: %v\n", path, err)
-			return nil
+			return nil // Continue walking despite error
 		}
 
+		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
 
 		totalFiles++
 
+		// Check if file extension matches
 		ext := strings.ToLower(filepath.Ext(path))
 		shouldScan := false
 		for _, allowedExt := range extensions {
@@ -144,14 +253,15 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		if shouldScan {
 			scannedFiles++
 
+			// Update progress every 100ms
 			if time.Since(lastUpdate) > 100*time.Millisecond {
 				fmt.Printf("\r[Scanning... Files checked: %d, Scanned: %d, Cards found: %d]",
 					totalFiles, scannedFiles, foundCards)
 				lastUpdate = time.Now()
 			}
 
-			// Pass CSV writer to scan function
-			cardsFound := scanFileWithCount(path, csvWriter)
+			// Scan the file (simplified - no extra parameters needed)
+			cardsFound := scanFileWithCount(path)
 			if cardsFound > 0 {
 				foundCards += cardsFound
 				fmt.Printf("\n✓ Found %d cards in: %s\n", cardsFound, filepath.Base(path))
@@ -161,7 +271,7 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		return nil
 	})
 
-	// Clear progress line
+	// Clear the progress line
 	fmt.Print("\r" + strings.Repeat(" ", 70) + "\r")
 
 	if err != nil {
@@ -169,6 +279,9 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	}
 
 	elapsed := time.Since(startTime)
+
+	// Finalize report with statistics
+	finalizeReport(totalFiles, scannedFiles, elapsed)
 
 	// Print summary
 	fmt.Println("\n" + strings.Repeat("=", 50))
@@ -183,16 +296,21 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		fmt.Printf("  Scan rate: %.1f files/second\n", rate)
 	}
 
+	// Export if output file is specified
 	if outputFile != "" {
-		fmt.Printf("\n  ✓ Results saved to: %s\n", outputFile)
+		err = exportReport(outputFile)
+		if err != nil {
+			fmt.Printf("\n  Error exporting: %v\n", err)
+		} else {
+			fmt.Printf("\n  ✓ Results saved to: %s\n", outputFile)
+		}
 	}
 
 	return nil
 }
 
 // scanFileWithCount scans a file and returns number of valid cards found
-func scanFileWithCount(filepath string, csvWriter *csv.Writer) int {
-	// Open the file
+func scanFileWithCount(filepath string) int {
 	file, err := os.Open(filepath)
 	if err != nil {
 		fmt.Printf("    Error: %v\n", err)
@@ -209,20 +327,16 @@ func scanFileWithCount(filepath string, csvWriter *csv.Writer) int {
 		line := scanner.Text()
 
 		cardNumber := findCardNumber(line)
-		if cardNumber != "" {
-			if validateLuhn(cardNumber) {
-				validCount++
+		if cardNumber != "" && validateLuhn(cardNumber) {
+			validCount++
 
-				cardType := getCardType(cardNumber)
-				maskedCard := maskCardNumber(cardNumber)
+			cardType := getCardType(cardNumber)
+			maskedCard := maskCardNumber(cardNumber)
 
-				fmt.Printf("    Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
+			fmt.Printf("    Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
 
-				// If CSV writer exists, write to CSV
-				if csvWriter != nil {
-					writeToCSV(csvWriter, filepath, lineNumber, cardType, maskedCard)
-				}
-			}
+			// Add to report
+			addFinding(filepath, lineNumber, cardType, maskedCard)
 		}
 	}
 
