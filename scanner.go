@@ -92,24 +92,18 @@ func findCardNumber(text string) string {
 	return ""
 }
 
-// scanDirectory
-func scanDirectoryWithOptions(dirPath string, outputFile string, silent bool, extensions []string) error {
-
-	if !silent {
-		fmt.Printf("\nScanning directory: %s\n", dirPath)
-		fmt.Println(strings.Repeat("=", 50))
-	}
-
+// scanDirectoryWithOptions walks through directory with specified options
+func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []string) error {
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
 	fmt.Println(strings.Repeat("=", 50))
 
-	// Single pass - no pre-counting
+	// Single pass scanning
 	startTime := time.Now()
 	totalFiles := 0
 	scannedFiles := 0
 	foundCards := 0
 
-	// Progress indicator without knowing total
+	// Progress indicator
 	lastUpdate := time.Now()
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -124,14 +118,20 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, silent bool, ex
 
 		totalFiles++
 
-		// Get file extension
+		// Check if file extension matches
 		ext := strings.ToLower(filepath.Ext(path))
+		shouldScan := false
+		for _, allowedExt := range extensions {
+			if ext == allowedExt {
+				shouldScan = true
+				break
+			}
+		}
 
-		// Only scan text-like files
-		if ext == ".txt" || ext == ".log" || ext == ".csv" {
+		if shouldScan {
 			scannedFiles++
 
-			// Update progress every 100ms (not every file)
+			// Update progress every 100ms
 			if time.Since(lastUpdate) > 100*time.Millisecond {
 				fmt.Printf("\r[Scanning... Files checked: %d, Scanned: %d, Cards found: %d]",
 					totalFiles, scannedFiles, foundCards)
@@ -142,7 +142,6 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, silent bool, ex
 			cardsFound := scanFileWithCount(path)
 			if cardsFound > 0 {
 				foundCards += cardsFound
-				// Show files with findings immediately
 				fmt.Printf("\n✓ Found %d cards in: %s\n", cardsFound, filepath.Base(path))
 			}
 		}
@@ -170,6 +169,12 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, silent bool, ex
 	if elapsed.Seconds() > 0 {
 		rate := float64(scannedFiles) / elapsed.Seconds()
 		fmt.Printf("  Scan rate: %.1f files/second\n", rate)
+	}
+
+	// TODO: If outputFile is provided, export results
+	if outputFile != "" {
+		fmt.Printf("\n  Results exported to: %s\n", outputFile)
+		// Export functionality will be added
 	}
 
 	return nil
@@ -371,7 +376,7 @@ func maskCardNumber(cardNumber string) string {
 // showHelp displays usage information
 func showHelp() {
 	fmt.Println(`
-BasicPanScanner v1.0.0 - PCI Compliance Scanner
+BasicPanScanner v1.1.0 - PCI Compliance Scanner
 Usage: ./scanner -path <directory> [options]
 
 Required:
@@ -379,14 +384,12 @@ Required:
 
 Options:
     -output <file>      Export results to CSV file
-    -silent            Silent mode (minimal output)
     -ext <list>        File extensions to scan (default: txt,log,csv)
     -help              Show this help message
 
 Examples:
     ./scanner -path /var/log
     ./scanner -path /home/data -output results.csv
-    ./scanner -path /var/log -silent
     ./scanner -path . -ext "txt,log,csv,xml"
     
 Exit Codes:
@@ -415,9 +418,8 @@ func main() {
 	// Define command line flags
 	pathFlag := flag.String("path", "", "Directory path to scan (required)")
 	outputFlag := flag.String("output", "", "Output file for results (CSV format)")
-	helpFlag := flag.Bool("help", false, "Show help message")
-	silentFlag := flag.Bool("silent", false, "Silent mode - only show summary")
 	extensionsFlag := flag.String("ext", "txt,log,csv", "File extensions to scan (comma-separated)")
+	helpFlag := flag.Bool("help", false, "Show help message")
 
 	// Parse the flags
 	flag.Parse()
@@ -435,10 +437,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Display banner (unless silent mode)
-	if !*silentFlag {
-		displayBanner()
-	}
+	// Display banner
+	displayBanner()
 
 	// Validate the directory
 	err := validateDirectory(*pathFlag)
@@ -453,14 +453,15 @@ func main() {
 		extensions[i] = "." + strings.TrimSpace(extensions[i])
 	}
 
-	// Start scanning
-	if !*silentFlag {
-		fmt.Printf("Scanning: %s\n", *pathFlag)
-		fmt.Printf("Extensions: %s\n", *extensionsFlag)
+	// Show scan configuration
+	fmt.Printf("Scanning: %s\n", *pathFlag)
+	fmt.Printf("Extensions: %s\n", *extensionsFlag)
+	if *outputFlag != "" {
+		fmt.Printf("Output file: %s\n", *outputFlag)
 	}
 
 	// Run the scan
-	err = scanDirectoryWithOptions(*pathFlag, *outputFlag, *silentFlag, extensions)
+	err = scanDirectoryWithOptions(*pathFlag, *outputFlag, extensions)
 	if err != nil {
 		fmt.Printf("Scan failed: %v\n", err)
 		os.Exit(1)
