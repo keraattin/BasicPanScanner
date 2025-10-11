@@ -8,9 +8,82 @@ import (
 	"fmt" // for printing
 	"os"  // operating system stuff (Stdin)
 	"path/filepath"
+	"strconv" //for converting strings to numbers
 	"strings"
 	"time"
 )
+
+// Config holds our configuration settings
+type Config struct {
+	Extensions  []string `json:"extensions"`
+	ExcludeDirs []string `json:"exclude_dirs"`
+	MaxFileSize string   `json:"max_file_size"`
+}
+
+// loadConfig reads the config.json file and returns a Config
+func loadConfig(filename string) (*Config, error) {
+	// Read the file
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("could not read config: %w", err)
+	}
+
+	// Parse the JSON
+	var config Config
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse config: %w", err)
+	}
+
+	return &config, nil
+}
+
+// parseFileSize converts "100MB" to bytes
+// Returns 0 if empty string (no limit)
+func parseFileSize(sizeStr string) (int64, error) {
+	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
+
+	// Empty means no limit
+	if sizeStr == "" {
+		return 0, nil
+	}
+
+	// Map of suffixes to multipliers
+	sizes := map[string]int64{
+		"B":  1,
+		"KB": 1024,
+		"MB": 1024 * 1024,
+		"GB": 1024 * 1024 * 1024,
+	}
+
+	// Check each suffix
+	for suffix, multiplier := range sizes {
+		if strings.HasSuffix(sizeStr, suffix) {
+			// Remove suffix and parse number
+			numStr := strings.TrimSuffix(sizeStr, suffix)
+			num, err := strconv.ParseInt(numStr, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid size: %s", sizeStr)
+			}
+			return num * multiplier, nil
+		}
+	}
+
+	return 0, fmt.Errorf("invalid size format: %s", sizeStr)
+}
+
+// shouldExcludeDir checks if a directory should be skipped
+func shouldExcludeDir(dirPath string, excludeDirs []string) bool {
+	dirName := filepath.Base(dirPath)
+
+	for _, excludeDir := range excludeDirs {
+		if dirName == excludeDir {
+			return true
+		}
+	}
+
+	return false
+}
 
 // Report is the common structure for all export formats
 type Report struct {
@@ -297,8 +370,8 @@ func findCardNumber(text string) string {
 	return ""
 }
 
-// scanDirectoryWithOptions walks through directory with specified options
-func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []string) error {
+// scanDirectoryWithOptions scans a directory with exclusions and limits
+func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []string, excludeDirs []string, maxFileSize int64) error {
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
 	fmt.Println(strings.Repeat("=", 50))
 
@@ -308,26 +381,36 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	startTime := time.Now()
 	totalFiles := 0
 	scannedFiles := 0
+	skippedFiles := 0
 	foundCards := 0
 
-	// Progress indicator
+	// Progress indicator timing
 	lastUpdate := time.Now()
 
+	// Walk through all files
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		// Handle walk errors
 		if err != nil {
-			fmt.Printf("Error accessing path %s: %v\n", path, err)
-			return nil // Continue walking despite error
+			return nil // Skip errors and continue
 		}
 
-		// Skip directories
+		// If it's a directory, check if we should skip it
 		if info.IsDir() {
+			if shouldExcludeDir(path, excludeDirs) {
+				return filepath.SkipDir // Skip this entire directory
+			}
 			return nil
 		}
 
+		// Count this file
 		totalFiles++
 
-		// Check if file extension matches
+		// Skip if file is too big
+		if maxFileSize > 0 && info.Size() > maxFileSize {
+			skippedFiles++
+			return nil
+		}
+
+		// Check if extension matches
 		ext := strings.ToLower(filepath.Ext(path))
 		shouldScan := false
 		for _, allowedExt := range extensions {
@@ -342,54 +425,58 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 
 			// Update progress every 100ms
 			if time.Since(lastUpdate) > 100*time.Millisecond {
-				fmt.Printf("\r[Scanning... Files checked: %d, Scanned: %d, Cards found: %d]",
+				fmt.Printf("\r[Files: %d | Scanned: %d | Cards: %d]",
 					totalFiles, scannedFiles, foundCards)
 				lastUpdate = time.Now()
 			}
 
-			// Scan the file (simplified - no extra parameters needed)
+			// Scan this file
 			cardsFound := scanFileWithCount(path)
 			if cardsFound > 0 {
 				foundCards += cardsFound
-				fmt.Printf("\n✓ Found %d cards in: %s\n", cardsFound, filepath.Base(path))
+				fmt.Printf("✓ Found %d cards in: %s\n\n", cardsFound, filepath.Base(path))
 			}
 		}
 
 		return nil
 	})
 
-	// Clear the progress line
-	fmt.Print("\r" + strings.Repeat(" ", 70) + "\r")
+	// Clear progress line
+	fmt.Print("\r" + strings.Repeat(" ", 60) + "\r")
 
 	if err != nil {
-		return fmt.Errorf("directory walk failed: %w", err)
+		return fmt.Errorf("scan failed: %w", err)
 	}
 
 	elapsed := time.Since(startTime)
 
-	// Finalize report with statistics
+	// Finalize report
 	finalizeReport(totalFiles, scannedFiles, elapsed)
 
 	// Print summary
 	fmt.Println("\n" + strings.Repeat("=", 50))
-	fmt.Printf("✓ Directory scan complete!\n")
-	fmt.Printf("  Time taken: %s\n", elapsed.Round(time.Second))
+	fmt.Printf("✓ Scan complete!\n")
+	fmt.Printf("  Time: %s\n", elapsed.Round(time.Second))
 	fmt.Printf("  Total files: %d\n", totalFiles)
-	fmt.Printf("  Files scanned: %d\n", scannedFiles)
+	fmt.Printf("  Scanned: %d\n", scannedFiles)
+	if skippedFiles > 0 {
+		fmt.Printf("  Skipped: %d\n", skippedFiles)
+	}
 	fmt.Printf("  Cards found: %d\n", foundCards)
 
+	// Add scan rate
 	if elapsed.Seconds() > 0 {
 		rate := float64(scannedFiles) / elapsed.Seconds()
 		fmt.Printf("  Scan rate: %.1f files/second\n", rate)
 	}
 
-	// Export if output file is specified
+	// Export if requested
 	if outputFile != "" {
 		err = exportReport(outputFile)
 		if err != nil {
-			fmt.Printf("\n  Error exporting: %v\n", err)
+			fmt.Printf("\n  Error: %v\n", err)
 		} else {
-			fmt.Printf("\n  ✓ Results saved to: %s\n", outputFile)
+			fmt.Printf("\n  ✓ Saved: %s\n", outputFile)
 		}
 	}
 
@@ -420,15 +507,11 @@ func scanFileWithCount(filepath string) int {
 			cardType := getCardType(cardNumber)
 			maskedCard := maskCardNumber(cardNumber)
 
-			fmt.Printf("    Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
+			fmt.Printf("Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
 
 			// Add to report
 			addFinding(filepath, lineNumber, cardType, maskedCard)
 		}
-	}
-
-	if validCount > 0 {
-		fmt.Printf("    → Found %d valid cards\n", validCount)
 	}
 
 	return validCount
@@ -588,21 +671,36 @@ BasicPanScanner v1.1.0 - PCI Compliance Scanner
 Usage: ./scanner -path <directory> [options]
 
 Required:
-    -path <directory>   Directory to scan
+    -path <directory>      Directory to scan
 
 Options:
-    -output <file>      Export results to CSV file
-    -ext <list>        File extensions to scan (default: txt,log,csv)
-    -help              Show this help message
+    -output <file>         Save results (.json, .csv, .html, .txt)
+    -ext <list>           Extensions to scan (default: from config)
+    -exclude <list>       Directories to skip (default: from config)
+    -help                 Show this help
 
 Examples:
+    # Basic scan
     ./scanner -path /var/log
-    ./scanner -path /home/data -output results.csv
-    ./scanner -path . -ext "txt,log,csv,xml"
-    
-Exit Codes:
-    0 - Success
-    1 - Error (invalid path, scan failure, etc.)
+
+    # Custom output
+    ./scanner -path /var/log -output report.json
+
+    # Override extensions
+    ./scanner -path /data -ext "txt,log,xml"
+
+    # Exclude directories
+    ./scanner -path /var -exclude ".git,cache"
+
+Configuration:
+    Edit config.json to change default settings.
+    CLI flags always override config values.
+
+Export Formats:
+    .json  - JSON format
+    .csv   - CSV format
+    .html  - HTML format
+    .txt   - Text format
 `)
 }
 
@@ -624,15 +722,16 @@ func displayBanner() {
 
 func main() {
 	// Define command line flags
-	pathFlag := flag.String("path", "", "Directory path to scan (required)")
-	outputFlag := flag.String("output", "", "Output file for results (CSV format)")
-	extensionsFlag := flag.String("ext", "txt,log,csv", "File extensions to scan (comma-separated)")
-	helpFlag := flag.Bool("help", false, "Show help message")
+	pathFlag := flag.String("path", "", "Directory to scan")
+	outputFlag := flag.String("output", "", "Output file")
+	extensionsFlag := flag.String("ext", "", "Extensions (e.g., txt,log,csv)")
+	excludeFlag := flag.String("exclude", "", "Exclude dirs (e.g., .git,vendor)")
+	helpFlag := flag.Bool("help", false, "Show help")
 
 	// Parse the flags
 	flag.Parse()
 
-	// Show help if requested or if no arguments provided
+	// Show help if requested
 	if *helpFlag || len(os.Args) == 1 {
 		showHelp()
 		return
@@ -640,36 +739,69 @@ func main() {
 
 	// Path is required
 	if *pathFlag == "" {
-		fmt.Println("Error: -path flag is required")
+		fmt.Println("Error: -path is required")
 		fmt.Println("Use -help for usage information")
 		os.Exit(1)
+	}
+
+	// Load config file (use defaults if it fails)
+	config, err := loadConfig("config.json")
+	if err != nil {
+		fmt.Printf("Warning: Could not load config.json: %v\n", err)
+		fmt.Println("Using default settings\n")
+		// Use defaults if config fails
+		config = &Config{
+			Extensions:  []string{"txt", "log", "csv"},
+			ExcludeDirs: []string{".git", "node_modules"},
+			MaxFileSize: "100MB",
+		}
+	}
+
+	// Start with config values
+	extensions := config.Extensions
+	excludeDirs := config.ExcludeDirs
+	maxFileSize, _ := parseFileSize(config.MaxFileSize)
+
+	// CLI flags override config
+	if *extensionsFlag != "" {
+		extensions = strings.Split(*extensionsFlag, ",")
+		for i := range extensions {
+			extensions[i] = strings.TrimSpace(extensions[i])
+		}
+	}
+
+	if *excludeFlag != "" {
+		excludeDirs = strings.Split(*excludeFlag, ",")
+		for i := range excludeDirs {
+			excludeDirs[i] = strings.TrimSpace(excludeDirs[i])
+		}
 	}
 
 	// Display banner
 	displayBanner()
 
-	// Validate the directory
-	err := validateDirectory(*pathFlag)
+	// Validate directory exists
+	err = validateDirectory(*pathFlag)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Parse extensions
-	extensions := strings.Split(*extensionsFlag, ",")
+	// Add dots to extensions if needed
 	for i := range extensions {
-		extensions[i] = "." + strings.TrimSpace(extensions[i])
+		if !strings.HasPrefix(extensions[i], ".") {
+			extensions[i] = "." + extensions[i]
+		}
 	}
 
-	// Show scan configuration
+	// Show what we're scanning (only path and output)
 	fmt.Printf("Scanning: %s\n", *pathFlag)
-	fmt.Printf("Extensions: %s\n", *extensionsFlag)
 	if *outputFlag != "" {
-		fmt.Printf("Output file: %s\n", *outputFlag)
+		fmt.Printf("Output: %s\n", *outputFlag)
 	}
 
 	// Run the scan
-	err = scanDirectoryWithOptions(*pathFlag, *outputFlag, extensions)
+	err = scanDirectoryWithOptions(*pathFlag, *outputFlag, extensions, excludeDirs, maxFileSize)
 	if err != nil {
 		fmt.Printf("Scan failed: %v\n", err)
 		os.Exit(1)

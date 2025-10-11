@@ -1,0 +1,39 @@
+{
+  "extensions": [
+    "txt",
+    "log",
+    "csv",
+    "sql",
+    "xml",
+    "json",
+    "conf",
+    "config",
+    "bak",
+    "backup",
+    "dump",
+    "dat",
+    "ini"
+  ],
+  "exclude_dirs": [
+    ".git",
+    ".svn",
+    ".hg",
+    "node_modules",
+    "vendor",
+    "dist",
+    "build",
+    "target",
+    "__pycache__",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    "env",
+    ".idea",
+    ".vscode",
+    "bin",
+    "obj",
+    "packages",
+    "bower_components"
+  ],
+  "max_file_size": "100MB"
+}
