@@ -494,36 +494,6 @@ func maskCardNumber(cardNumber string) string {
 	return masked
 }
 
-// createCSVFile creates and writes header to CSV file
-func createCSVFile(filename string) (*csv.Writer, *os.File, error) {
-	file, err := os.Create(filename)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	writer := csv.NewWriter(file)
-
-	// Write CSV header
-	header := []string{"File", "Line", "Card Type", "Masked Card", "Timestamp"}
-	writer.Write(header)
-	writer.Flush()
-
-	return writer, file, nil
-}
-
-// writeToCSV adds a finding to the CSV file
-func writeToCSV(writer *csv.Writer, filepath string, lineNum int, cardType string, maskedCard string) {
-	record := []string{
-		filepath,
-		fmt.Sprintf("%d", lineNum),
-		cardType,
-		maskedCard,
-		time.Now().Format("2006-01-02 15:04:05"),
-	}
-	writer.Write(record)
-	writer.Flush()
-}
-
 // showHelp displays usage information
 func showHelp() {
 	fmt.Println(`
