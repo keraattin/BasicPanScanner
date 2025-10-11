@@ -86,6 +86,8 @@ func exportReport(filename string) error {
 		return exportJSON(filename)
 	case ".csv":
 		return exportCSV(filename)
+	case ".txt":
+		return exportTXT(filename)
 	default:
 		return fmt.Errorf("unsupported format: %s", ext)
 	}
@@ -126,6 +128,33 @@ func exportCSV(filename string) error {
 	}
 
 	return nil
+}
+
+// exportTXT exports report as plain text
+func exportTXT(filename string) error {
+	var content strings.Builder
+
+	content.WriteString("BASICPANSCANNER REPORT\n")
+	content.WriteString(strings.Repeat("=", 50) + "\n\n")
+
+	content.WriteString(fmt.Sprintf("Scan Date: %s\n", currentReport.ScanDate.Format("2006-01-02 15:04:05")))
+	content.WriteString(fmt.Sprintf("Directory: %s\n", currentReport.Directory))
+	content.WriteString(fmt.Sprintf("Duration: %s\n", currentReport.Duration))
+	content.WriteString(fmt.Sprintf("Total Files: %d\n", currentReport.TotalFiles))
+	content.WriteString(fmt.Sprintf("Scanned: %d\n", currentReport.ScannedFiles))
+	content.WriteString(fmt.Sprintf("Cards Found: %d\n\n", len(currentReport.Findings)))
+
+	content.WriteString("FINDINGS:\n")
+	content.WriteString(strings.Repeat("-", 50) + "\n")
+
+	for i, f := range currentReport.Findings {
+		content.WriteString(fmt.Sprintf("\n[%d] %s\n", i+1, f.CardType))
+		content.WriteString(fmt.Sprintf("    File: %s\n", f.FilePath))
+		content.WriteString(fmt.Sprintf("    Line: %d\n", f.LineNumber))
+		content.WriteString(fmt.Sprintf("    Card: %s\n", f.MaskedCard))
+	}
+
+	return os.WriteFile(filename, []byte(content.String()), 0644)
 }
 
 // validateDirectory checks if the path exists and is a directory
