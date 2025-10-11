@@ -88,6 +88,8 @@ func exportReport(filename string) error {
 		return exportCSV(filename)
 	case ".txt":
 		return exportTXT(filename)
+	case ".html":
+		return exportHTML(filename)
 	default:
 		return fmt.Errorf("unsupported format: %s", ext)
 	}
@@ -128,6 +130,62 @@ func exportCSV(filename string) error {
 	}
 
 	return nil
+}
+
+// exportHTML exports report as HTML
+func exportHTML(filename string) error {
+	var html strings.Builder
+
+	html.WriteString(`<!DOCTYPE html>
+<html>
+<head>
+    <title>PAN Scanner Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #4CAF50; color: white; }
+        tr:hover { background-color: #f5f5f5; }
+        .summary { background-color: #f0f0f0; padding: 10px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>BasicPanScanner Report</h1>
+    <div class="summary">
+        <p><strong>Scan Date:</strong> ` + currentReport.ScanDate.Format("2006-01-02 15:04:05") + `</p>
+        <p><strong>Directory:</strong> ` + currentReport.Directory + `</p>
+        <p><strong>Duration:</strong> ` + currentReport.Duration.String() + `</p>
+        <p><strong>Files Scanned:</strong> ` + fmt.Sprintf("%d / %d", currentReport.ScannedFiles, currentReport.TotalFiles) + `</p>
+        <p><strong>Cards Found:</strong> ` + fmt.Sprintf("%d", len(currentReport.Findings)) + `</p>
+    </div>
+    <h2>Findings</h2>
+    <table>
+        <tr>
+            <th>File</th>
+            <th>Line</th>
+            <th>Card Type</th>
+            <th>Masked Card</th>
+            <th>Timestamp</th>
+        </tr>`)
+
+	for _, f := range currentReport.Findings {
+		html.WriteString(fmt.Sprintf(`
+        <tr>
+            <td>%s</td>
+            <td>%d</td>
+            <td>%s</td>
+            <td>%s</td>
+            <td>%s</td>
+        </tr>`, f.FilePath, f.LineNumber, f.CardType, f.MaskedCard, f.Timestamp.Format("15:04:05")))
+	}
+
+	html.WriteString(`
+    </table>
+</body>
+</html>`)
+
+	return os.WriteFile(filename, []byte(html.String()), 0644)
 }
 
 // exportTXT exports report as plain text
