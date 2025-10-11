@@ -10,23 +10,6 @@ import (
 	"time"
 )
 
-// getDirectoryFromUser prompts user for a directory path
-func getDirectoryFromUser() string {
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Print("Enter directory to scan (or press Enter for current): ")
-	dirPath, _ := reader.ReadString('\n')
-	dirPath = strings.TrimSpace(dirPath)
-
-	// Default to current directory if empty
-	if dirPath == "" {
-		dirPath = "."
-		fmt.Println("Using current directory")
-	}
-
-	return dirPath
-}
-
 // validateDirectory checks if the path exists and is a directory
 func validateDirectory(dirPath string) error {
 	info, err := os.Stat(dirPath)
@@ -389,24 +372,27 @@ func maskCardNumber(cardNumber string) string {
 func showHelp() {
 	fmt.Println(`
 BasicPanScanner v1.0.0 - PCI Compliance Scanner
-Usage: ./scanner [options]
+Usage: ./scanner -path <directory> [options]
+
+Required:
+    -path <directory>   Directory to scan
 
 Options:
-	-path <directory>  Directory to scan
-	-output <file>     Export results to CSV file
-	-silent            Silent mode (minimal output)
-	-ext <list>        File extensions to scan (default: txt,log,csv)
-	-help              Show this help message
+    -output <file>      Export results to CSV file
+    -silent            Silent mode (minimal output)
+    -ext <list>        File extensions to scan (default: txt,log,csv)
+    -help              Show this help message
 
 Examples:
-	./scanner -path /var/log
-	./scanner -path /home/data -output results.csv
-	./scanner -path /var/log -silent
-	./scanner -path . -ext "txt,log,csv,xml"
-	
-Interactive Mode:
-	./scanner          (will prompt for directory)
-	`)
+    ./scanner -path /var/log
+    ./scanner -path /home/data -output results.csv
+    ./scanner -path /var/log -silent
+    ./scanner -path . -ext "txt,log,csv,xml"
+    
+Exit Codes:
+    0 - Success
+    1 - Error (invalid path, scan failure, etc.)
+`)
 }
 
 func displayBanner() {
@@ -427,7 +413,7 @@ func displayBanner() {
 
 func main() {
 	// Define command line flags
-	pathFlag := flag.String("path", "", "Directory path to scan")
+	pathFlag := flag.String("path", "", "Directory path to scan (required)")
 	outputFlag := flag.String("output", "", "Output file for results (CSV format)")
 	helpFlag := flag.Bool("help", false, "Show help message")
 	silentFlag := flag.Bool("silent", false, "Silent mode - only show summary")
@@ -436,35 +422,29 @@ func main() {
 	// Parse the flags
 	flag.Parse()
 
-	// Show help if requested
-	if *helpFlag {
+	// Show help if requested or if no arguments provided
+	if *helpFlag || len(os.Args) == 1 {
 		showHelp()
 		return
+	}
+
+	// Path is required
+	if *pathFlag == "" {
+		fmt.Println("Error: -path flag is required")
+		fmt.Println("Use -help for usage information")
+		os.Exit(1)
 	}
 
 	// Display banner (unless silent mode)
 	if !*silentFlag {
 		displayBanner()
-		time.Sleep(1 * time.Second)
-	}
-
-	// Get directory path (from flag or interactive)
-	var dirPath string
-	if *pathFlag != "" {
-		dirPath = *pathFlag
-		if !*silentFlag {
-			fmt.Printf("Scanning path from command line: %s\n", dirPath)
-		}
-	} else {
-		// Interactive mode
-		dirPath = getDirectoryFromUser()
 	}
 
 	// Validate the directory
-	err := validateDirectory(dirPath)
+	err := validateDirectory(*pathFlag)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
-		os.Exit(1) // Exit with error code
+		os.Exit(1)
 	}
 
 	// Parse extensions
@@ -473,8 +453,14 @@ func main() {
 		extensions[i] = "." + strings.TrimSpace(extensions[i])
 	}
 
-	// Pass flags to scan function
-	err = scanDirectoryWithOptions(dirPath, *outputFlag, *silentFlag, extensions)
+	// Start scanning
+	if !*silentFlag {
+		fmt.Printf("Scanning: %s\n", *pathFlag)
+		fmt.Printf("Extensions: %s\n", *extensionsFlag)
+	}
+
+	// Run the scan
+	err = scanDirectoryWithOptions(*pathFlag, *outputFlag, *silentFlag, extensions)
 	if err != nil {
 		fmt.Printf("Scan failed: %v\n", err)
 		os.Exit(1)
