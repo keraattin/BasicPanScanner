@@ -1,10 +1,41 @@
 # BasicPanScanner
 
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Go Version](https://img.shields.io/badge/go-%3E%3D1.19-00ADD8.svg)
+
 A lightweight Go tool for scanning files and directories to detect **credit card numbers** for **PCI DSS** compliance.
+
+## 📋 Requirements
+
+- **Go**: Version 1.19 or higher
+- **Operating System**: Linux, macOS, or Windows
+- **Permissions**: Read access to target files/directories
 
 ## ⚠️ Security Notice
 
 This tool is for **authorized security auditing only**. Use only on systems you own or have explicit permission to scan.
+
+## 🎯 Purpose
+
+BasicPanScanner helps organizations maintain PCI DSS compliance by identifying potential credit card data (PANs - Primary Account Numbers) stored in files across their systems. This tool is essential for:
+
+- **Security Audits**: Discover where sensitive payment card data might be stored
+- **PCI Compliance**: Meet PCI DSS requirement 3.2 (data discovery)
+- **Data Breach Prevention**: Identify and secure exposed cardholder data
+- **Incident Response**: Quickly scan systems after security incidents
+
+## ✨ Features (v1.1.0)
+ 
+- **🔍 Smart Pattern Detection**: Identifies 13-19 digit card numbers
+- **✅ Luhn Algorithm Validation**: Eliminates false positives with checksum verification
+- **💳 Card Type Identification**: Detects Visa, Mastercard, Amex, Discover, JCB, Diners Club, and UnionPay
+- **🔒 PCI-Compliant Masking**: Displays only first 6 and last 4 digits (BIN + last4)
+- **📁 Directory Scanning**: Recursively scan entire directory trees
+- **⚡ Concurrent File Processing**: Parallel scanning with goroutines for improved performance
+- **📊 Real-time Progress Indicators**: Visual feedback during long-running scans
+- **🎨 Professional Banner**: Clear visual identity with version info
+- **🎛️ CLI Arguments**: Flexible command-line options for custom scans
+- **📝 Detailed Reporting**: JSON and text output formats
 
 ## Features (v1.0.0)
 
@@ -50,11 +81,7 @@ go run scanner.go
 ```
 
 ## Usage
-### Interactive Mode
-```
-./scanner
-# Enter directory when prompted
-```
+
 ### Scan Current Directory
 ```
 ./scanner
@@ -62,33 +89,64 @@ go run scanner.go
 ```
 
 
-## Example Output
+## 📊 Output Examples
+
+### Text Output
+
 ```
-    ╔══════════════════════════════════════════════════════════╗
-    ║                                                          ║
-    ║     BasicPanScanner - PCI Compliance Tool                ║
-    ║     ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                  ║
-    ║     Version: 1.0.0                                       ║
-    ║     Author:  @keraattin                                  ║
-    ║     Purpose: Detect credit card data in files            ║
-    ║                                                          ║
-    ║     [████ ████ ████ ████] Card Detection Active          ║
-    ║                                                          ║
-    ╚══════════════════════════════════════════════════════════╝
+============================================================
+              BasicPanScanner v1.1.0
+      PCI-Compliant Credit Card Number Scanner
+============================================================
 
-Enter directory to scan (or press Enter for current): /var/log
+Scanning: /var/log/application
 
-Scanning directory: /var/log
-==================================================
-Scanning file: /var/log/app.log
-  Line 42: Visa card: 453201******0366 ✓
-  Line 156: MasterCard card: 510510******5100 ✓
-Scan complete. Found 2 patterns, 2 valid cards.
+[FOUND] /var/log/app.log:42
+  Card: 453201******0366
+  Type: Visa
+  Valid: ✓
 
-==================================================
-Directory scan complete
-Total files found: 45
-Files scanned: 12
+[FOUND] /var/log/transactions.txt:108
+  Card: 378282******1005
+  Type: American Express
+  Valid: ✓
+
+Summary:
+--------
+Files Scanned: 234
+Cards Found: 2
+Scan Duration: 1.23s
+```
+
+### JSON Output
+
+```json
+{
+  "version": "1.1.0",
+  "scan_date": "2025-10-11T10:30:00Z",
+  "path": "/var/log",
+  "summary": {
+    "files_scanned": 234,
+    "cards_found": 2,
+    "duration_seconds": 1.23
+  },
+  "findings": [
+    {
+      "file": "/var/log/app.log",
+      "line": 42,
+      "masked_card": "453201******0366",
+      "card_type": "Visa",
+      "valid": true
+    },
+    {
+      "file": "/var/log/transactions.txt",
+      "line": 108,
+      "masked_card": "378282******1005",
+      "card_type": "American Express",
+      "valid": true
+    }
+  ]
+}
 ```
 
 ## How It Works
@@ -98,21 +156,17 @@ Files scanned: 12
 - Type Detection: Identifies card issuer by BIN
 - Secure Display: Masks middle digits for security
 
-## Next Features (v1.1.0)
-- [ ] Progress indicators for large directories
-- [ ] Export results to CSV/JSON
-- [ ] Configuration file support
-- [ ] Exclude patterns and directories
+## 📝 Changelog
 
-## Future Plans (v2.0.0)
+### v1.1.0 (2025-10-11)
 
-- [ ] Database scanning (MySQL, PostgreSQL)
-- [ ] Memory scanning
-- [ ] Network traffic monitoring
-- [ ] Cloud storage scanning (S3, Azure)
-- [ ] Regular expression patterns
-- [ ] Multi-threaded scanning
-- [ ] Real-time monitoring mode
+**Added:**
+- ⚡ Concurrent file processing with goroutines
+- 📊 Real-time progress indicators
+- 🎛️ Comprehensive CLI arguments
+- 📝 JSON output format support
+- 🔧 Configurable worker pool size
+- 📈 Enhanced performance for large-scale scans
 
 ## Disclaimer
 This tool is for educational and authorized security auditing purposes only. Users are responsible for complying with all applicable laws and regulations.
