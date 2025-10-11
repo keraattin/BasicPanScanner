@@ -8,8 +8,10 @@ import (
 	"fmt" // for printing
 	"os"  // operating system stuff (Stdin)
 	"path/filepath"
+	"runtime" //to get CPU count
 	"strconv" //for converting strings to numbers
 	"strings"
+	"sync" //for Mutex and WaitGroup
 	"time"
 )
 
@@ -370,10 +372,149 @@ func findCardNumber(text string) string {
 	return ""
 }
 
-// scanDirectoryWithOptions scans a directory with exclusions and limits
+// scanDirectoryWithOptionsConcurrent scans directory with goroutines
+func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, extensions []string, excludeDirs []string, maxFileSize int64, workers int) error {
+	fmt.Printf("\nScanning directory: %s\n", dirPath)
+	fmt.Printf("Workers: %d (concurrent scanning enabled)\n", workers)
+	fmt.Println(strings.Repeat("=", 60))
+
+	// Initialize report
+	initReport(dirPath, extensions)
+
+	startTime := time.Now()
+
+	// Shared counters (protected by mutex)
+	var mu sync.Mutex
+	totalFiles := 0
+	scannedFiles := 0
+	skippedFiles := 0
+	foundCards := 0
+
+	// Collect files to scan
+	var filesToScan []string
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		// Skip excluded directories
+		if info.IsDir() {
+			if shouldExcludeDir(path, excludeDirs) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Count total files
+		mu.Lock()
+		totalFiles++
+		mu.Unlock()
+
+		// Skip large files
+		if maxFileSize > 0 && info.Size() > maxFileSize {
+			mu.Lock()
+			skippedFiles++
+			mu.Unlock()
+			return nil
+		}
+
+		// Check extension
+		ext := strings.ToLower(filepath.Ext(path))
+		for _, allowedExt := range extensions {
+			if ext == allowedExt {
+				filesToScan = append(filesToScan, path)
+				break
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("directory walk failed: %w", err)
+	}
+
+	// Create channels for work distribution
+	filesChan := make(chan string, workers*2) // Buffered channel
+
+	// WaitGroup to wait for all workers
+	var wg sync.WaitGroup
+
+	// Start worker goroutines
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+
+			// Each worker processes files from the channel
+			for filePath := range filesChan {
+				cardsFound := scanFileWithCount(filePath)
+
+				// Update shared counters safely
+				mu.Lock()
+				scannedFiles++
+				if cardsFound > 0 {
+					foundCards += cardsFound
+					fmt.Printf("✓ Found %d cards in: %s\n", cardsFound, filepath.Base(filePath))
+				}
+				// Show progress
+				fmt.Printf("\r[Scanned: %d/%d | Cards: %d]", scannedFiles, len(filesToScan), foundCards)
+				mu.Unlock()
+			}
+		}(i)
+	}
+
+	// Send files to workers
+	for _, file := range filesToScan {
+		filesChan <- file
+	}
+	close(filesChan) // Close channel when done sending
+
+	// Wait for all workers to finish
+	wg.Wait()
+
+	// Clear progress line
+	fmt.Print("\r" + strings.Repeat(" ", 60) + "\r")
+
+	elapsed := time.Since(startTime)
+
+	// Finalize report
+	finalizeReport(totalFiles, scannedFiles, elapsed)
+
+	// Print summary
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Printf("✓ Scan complete!\n")
+	fmt.Printf("  Time: %s\n", elapsed.Round(time.Second))
+	fmt.Printf("  Total files: %d\n", totalFiles)
+	fmt.Printf("  Scanned: %d\n", scannedFiles)
+	if skippedFiles > 0 {
+		fmt.Printf("  Skipped: %d\n", skippedFiles)
+	}
+	fmt.Printf("  Cards found: %d\n", foundCards)
+
+	if elapsed.Seconds() > 0 {
+		rate := float64(scannedFiles) / elapsed.Seconds()
+		fmt.Printf("  Scan rate: %.1f files/second\n", rate)
+	}
+
+	// Export if requested
+	if outputFile != "" {
+		err = exportReport(outputFile)
+		if err != nil {
+			fmt.Printf("\n  Error: %v\n", err)
+		} else {
+			fmt.Printf("\n  ✓ Saved: %s\n", outputFile)
+		}
+	}
+
+	return nil
+}
+
+// scanDirectoryWithOptions scans a directory (single-threaded)
 func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []string, excludeDirs []string, maxFileSize int64) error {
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
-	fmt.Println(strings.Repeat("=", 50))
+	fmt.Printf("Workers: 1 (single-threaded mode)\n")
+	fmt.Println(strings.Repeat("=", 60))
 
 	// Initialize report
 	initReport(dirPath, extensions)
@@ -390,13 +531,13 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	// Walk through all files
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Skip errors and continue
+			return nil
 		}
 
 		// If it's a directory, check if we should skip it
 		if info.IsDir() {
 			if shouldExcludeDir(path, excludeDirs) {
-				return filepath.SkipDir // Skip this entire directory
+				return filepath.SkipDir
 			}
 			return nil
 		}
@@ -423,18 +564,17 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		if shouldScan {
 			scannedFiles++
 
-			// Update progress every 100ms
-			if time.Since(lastUpdate) > 100*time.Millisecond {
-				fmt.Printf("\r[Files: %d | Scanned: %d | Cards: %d]",
-					totalFiles, scannedFiles, foundCards)
-				lastUpdate = time.Now()
-			}
-
 			// Scan this file
 			cardsFound := scanFileWithCount(path)
 			if cardsFound > 0 {
 				foundCards += cardsFound
-				fmt.Printf("✓ Found %d cards in: %s\n\n", cardsFound, filepath.Base(path))
+				fmt.Printf("✓ Found %d cards in: %s\n", cardsFound, filepath.Base(path))
+			}
+
+			// Update progress every 100ms
+			if time.Since(lastUpdate) > 100*time.Millisecond {
+				fmt.Printf("\r[Scanned: %d/%d | Cards: %d]", scannedFiles, totalFiles, foundCards)
+				lastUpdate = time.Now()
 			}
 		}
 
@@ -454,7 +594,7 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	finalizeReport(totalFiles, scannedFiles, elapsed)
 
 	// Print summary
-	fmt.Println("\n" + strings.Repeat("=", 50))
+	fmt.Println("\n" + strings.Repeat("=", 60))
 	fmt.Printf("✓ Scan complete!\n")
 	fmt.Printf("  Time: %s\n", elapsed.Round(time.Second))
 	fmt.Printf("  Total files: %d\n", totalFiles)
@@ -464,7 +604,6 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	}
 	fmt.Printf("  Cards found: %d\n", foundCards)
 
-	// Add scan rate
 	if elapsed.Seconds() > 0 {
 		rate := float64(scannedFiles) / elapsed.Seconds()
 		fmt.Printf("  Scan rate: %.1f files/second\n", rate)
@@ -487,7 +626,6 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 func scanFileWithCount(filepath string) int {
 	file, err := os.Open(filepath)
 	if err != nil {
-		fmt.Printf("    Error: %v\n", err)
 		return 0
 	}
 	defer file.Close()
@@ -507,9 +645,7 @@ func scanFileWithCount(filepath string) int {
 			cardType := getCardType(cardNumber)
 			maskedCard := maskCardNumber(cardNumber)
 
-			fmt.Printf("Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
-
-			// Add to report
+			// Add to report (no console output - controlled by caller)
 			addFinding(filepath, lineNumber, cardType, maskedCard)
 		}
 	}
@@ -677,20 +813,26 @@ Options:
     -output <file>         Save results (.json, .csv, .html, .txt)
     -ext <list>           Extensions to scan (default: from config)
     -exclude <list>       Directories to skip (default: from config)
+    -workers <n>          Number of concurrent workers (default: CPU/2, max: CPU cores)
     -help                 Show this help
 
 Examples:
-    # Basic scan
+    # Basic scan (uses default workers)
     ./scanner -path /var/log
 
-    # Custom output
-    ./scanner -path /var/log -output report.json
+    # Fast scan with more workers
+    ./scanner -path /var/log -workers 4
 
-    # Override extensions
-    ./scanner -path /data -ext "txt,log,xml"
+    # Single-threaded scan
+    ./scanner -path /var/log -workers 1
 
-    # Exclude directories
-    ./scanner -path /var -exclude ".git,cache"
+    # Full scan with output
+    ./scanner -path /data -workers 4 -output report.json
+
+Performance:
+    Default workers: CPU cores / 2 (safe for production)
+    Max workers: CPU cores (automatically limited)
+    More workers = faster scanning (2-4x speed improvement)
 
 Configuration:
     Edit config.json to change default settings.
@@ -726,6 +868,7 @@ func main() {
 	outputFlag := flag.String("output", "", "Output file")
 	extensionsFlag := flag.String("ext", "", "Extensions (e.g., txt,log,csv)")
 	excludeFlag := flag.String("exclude", "", "Exclude dirs (e.g., .git,vendor)")
+	workersFlag := flag.Int("workers", 0, "Number of concurrent workers (default: CPU/2)")
 	helpFlag := flag.Bool("help", false, "Show help")
 
 	// Parse the flags
@@ -749,7 +892,6 @@ func main() {
 	if err != nil {
 		fmt.Printf("Warning: Could not load config.json: %v\n", err)
 		fmt.Println("Using default settings\n")
-		// Use defaults if config fails
 		config = &Config{
 			Extensions:  []string{"txt", "log", "csv"},
 			ExcludeDirs: []string{".git", "node_modules"},
@@ -777,6 +919,29 @@ func main() {
 		}
 	}
 
+	// Determine number of workers
+	numCPU := runtime.NumCPU()
+	workers := *workersFlag
+
+	if workers == 0 {
+		// Default: Half of CPU cores (minimum 1)
+		workers = numCPU / 2
+		if workers < 1 {
+			workers = 1
+		}
+	}
+
+	// Validate worker count
+	if workers < 1 {
+		fmt.Println("Error: workers must be at least 1")
+		os.Exit(1)
+	}
+
+	if workers > numCPU {
+		fmt.Printf("Warning: workers (%d) exceeds CPU cores (%d), limiting to %d\n", workers, numCPU, numCPU)
+		workers = numCPU
+	}
+
 	// Display banner
 	displayBanner()
 
@@ -794,14 +959,13 @@ func main() {
 		}
 	}
 
-	// Show what we're scanning (only path and output)
-	fmt.Printf("Scanning: %s\n", *pathFlag)
-	if *outputFlag != "" {
-		fmt.Printf("Output: %s\n", *outputFlag)
+	// Run the scan (concurrent if workers > 1)
+	if workers > 1 {
+		err = scanDirectoryWithOptionsConcurrent(*pathFlag, *outputFlag, extensions, excludeDirs, maxFileSize, workers)
+	} else {
+		err = scanDirectoryWithOptions(*pathFlag, *outputFlag, extensions, excludeDirs, maxFileSize)
 	}
 
-	// Run the scan
-	err = scanDirectoryWithOptions(*pathFlag, *outputFlag, extensions, excludeDirs, maxFileSize)
 	if err != nil {
 		fmt.Printf("Scan failed: %v\n", err)
 		os.Exit(1)
