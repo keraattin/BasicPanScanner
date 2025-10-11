@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio" // buffered I/O for reading input
+	"encoding/csv"
 	"flag"
 	"fmt" // for printing
 	"os"  // operating system stuff (Stdin)
@@ -97,13 +98,26 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
 	fmt.Println(strings.Repeat("=", 50))
 
-	// Single pass scanning
+	// Create CSV file if output requested
+	var csvWriter *csv.Writer
+	var csvFile *os.File
+
+	if outputFile != "" {
+		var err error
+		csvWriter, csvFile, err = createCSVFile(outputFile)
+		if err != nil {
+			fmt.Printf("Error creating CSV file: %v\n", err)
+			return err
+		}
+		defer csvFile.Close()
+	}
+
+	// Rest of the existing scanning code...
 	startTime := time.Now()
 	totalFiles := 0
 	scannedFiles := 0
 	foundCards := 0
 
-	// Progress indicator
 	lastUpdate := time.Now()
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -118,7 +132,6 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 
 		totalFiles++
 
-		// Check if file extension matches
 		ext := strings.ToLower(filepath.Ext(path))
 		shouldScan := false
 		for _, allowedExt := range extensions {
@@ -131,15 +144,14 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		if shouldScan {
 			scannedFiles++
 
-			// Update progress every 100ms
 			if time.Since(lastUpdate) > 100*time.Millisecond {
 				fmt.Printf("\r[Scanning... Files checked: %d, Scanned: %d, Cards found: %d]",
 					totalFiles, scannedFiles, foundCards)
 				lastUpdate = time.Now()
 			}
 
-			// Scan the file
-			cardsFound := scanFileWithCount(path)
+			// Pass CSV writer to scan function
+			cardsFound := scanFileWithCount(path, csvWriter)
 			if cardsFound > 0 {
 				foundCards += cardsFound
 				fmt.Printf("\n✓ Found %d cards in: %s\n", cardsFound, filepath.Base(path))
@@ -149,7 +161,7 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		return nil
 	})
 
-	// Clear the progress line
+	// Clear progress line
 	fmt.Print("\r" + strings.Repeat(" ", 70) + "\r")
 
 	if err != nil {
@@ -171,17 +183,15 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		fmt.Printf("  Scan rate: %.1f files/second\n", rate)
 	}
 
-	// TODO: If outputFile is provided, export results
 	if outputFile != "" {
-		fmt.Printf("\n  Results exported to: %s\n", outputFile)
-		// Export functionality will be added
+		fmt.Printf("\n  ✓ Results saved to: %s\n", outputFile)
 	}
 
 	return nil
 }
 
 // scanFileWithCount scans a file and returns number of valid cards found
-func scanFileWithCount(filepath string) int {
+func scanFileWithCount(filepath string, csvWriter *csv.Writer) int {
 	// Open the file
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -190,35 +200,32 @@ func scanFileWithCount(filepath string) int {
 	}
 	defer file.Close()
 
-	// Create a scanner for line-by-line reading
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	validCount := 0
 
-	// Process each line
 	for scanner.Scan() {
 		lineNumber++
 		line := scanner.Text()
 
-		// Check current line for card patterns
 		cardNumber := findCardNumber(line)
 		if cardNumber != "" {
-			// Validate with Luhn algorithm
 			if validateLuhn(cardNumber) {
 				validCount++
 
-				// Get card type
 				cardType := getCardType(cardNumber)
-
-				// Mask the card number for safe display
 				maskedCard := maskCardNumber(cardNumber)
 
 				fmt.Printf("    Line %d: %s card: %s ✓\n", lineNumber, cardType, maskedCard)
+
+				// If CSV writer exists, write to CSV
+				if csvWriter != nil {
+					writeToCSV(csvWriter, filepath, lineNumber, cardType, maskedCard)
+				}
 			}
 		}
 	}
 
-	// Only show summary if cards were found
 	if validCount > 0 {
 		fmt.Printf("    → Found %d valid cards\n", validCount)
 	}
@@ -371,6 +378,36 @@ func maskCardNumber(cardNumber string) string {
 	masked += cardNumber[length-4:]
 
 	return masked
+}
+
+// createCSVFile creates and writes header to CSV file
+func createCSVFile(filename string) (*csv.Writer, *os.File, error) {
+	file, err := os.Create(filename)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	writer := csv.NewWriter(file)
+
+	// Write CSV header
+	header := []string{"File", "Line", "Card Type", "Masked Card", "Timestamp"}
+	writer.Write(header)
+	writer.Flush()
+
+	return writer, file, nil
+}
+
+// writeToCSV adds a finding to the CSV file
+func writeToCSV(writer *csv.Writer, filepath string, lineNum int, cardType string, maskedCard string) {
+	record := []string{
+		filepath,
+		fmt.Sprintf("%d", lineNum),
+		cardType,
+		maskedCard,
+		time.Now().Format("2006-01-02 15:04:05"),
+	}
+	writer.Write(record)
+	writer.Flush()
 }
 
 // showHelp displays usage information
