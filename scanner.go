@@ -16,76 +16,15 @@ import (
 	"time"
 )
 
+// ============================================================================
+// CONFIGURATION STRUCTURES
+// ============================================================================
+
 // Config holds our configuration settings
 type Config struct {
 	Extensions  []string `json:"extensions"`
 	ExcludeDirs []string `json:"exclude_dirs"`
 	MaxFileSize string   `json:"max_file_size"`
-}
-
-// loadConfig reads the config.json file and returns a Config
-func loadConfig(filename string) (*Config, error) {
-	// Read the file
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("could not read config: %w", err)
-	}
-
-	// Parse the JSON
-	var config Config
-	err = json.Unmarshal(data, &config)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse config: %w", err)
-	}
-
-	return &config, nil
-}
-
-// parseFileSize converts "100MB" to bytes
-// Returns 0 if empty string (no limit)
-func parseFileSize(sizeStr string) (int64, error) {
-	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
-
-	// Empty means no limit
-	if sizeStr == "" {
-		return 0, nil
-	}
-
-	// Map of suffixes to multipliers
-	sizes := map[string]int64{
-		"B":  1,
-		"KB": 1024,
-		"MB": 1024 * 1024,
-		"GB": 1024 * 1024 * 1024,
-	}
-
-	// Check each suffix
-	for suffix, multiplier := range sizes {
-		if strings.HasSuffix(sizeStr, suffix) {
-			// Remove suffix and parse number
-			numStr := strings.TrimSuffix(sizeStr, suffix)
-			num, err := strconv.ParseInt(numStr, 10, 64)
-			if err != nil {
-				return 0, fmt.Errorf("invalid size: %s", sizeStr)
-			}
-			return num * multiplier, nil
-		}
-	}
-
-	return 0, fmt.Errorf("invalid size format: %s", sizeStr)
-}
-
-// shouldExcludeDir checks if a directory should be skipped
-func shouldExcludeDir(dirPath string, excludeDirs []string) bool {
-	dirName := filepath.Base(dirPath)
-
-	for _, excludeDir := range excludeDirs {
-		if dirName == excludeDir {
-			return true
-		}
-	}
-
-	return false
 }
 
 // Report is the common structure for all export formats
@@ -108,8 +47,436 @@ type CardFinding struct {
 	Timestamp  time.Time
 }
 
+// CardPattern represents a single card issuer's detection pattern
+type CardPattern struct {
+	Name    string         // Card issuer name (e.g., "Visa")
+	Pattern *regexp.Regexp // Regex pattern that handles everything
+}
+
+// ============================================================================
+// GLOBAL VARIABLES
+// ============================================================================
+
 // Global report variable
 var currentReport *Report
+
+// Global patterns - compiled once at startup for performance
+var cardPatterns []CardPattern
+
+// ============================================================================
+// CONFIGURATION AND VALIDATION
+// ============================================================================
+
+// validateConfig checks if config values are valid
+func validateConfig(config *Config) error {
+	// Check if extensions list is empty
+	if len(config.Extensions) == 0 {
+		return fmt.Errorf("config error: extensions list cannot be empty")
+	}
+
+	// Check if exclude_dirs list is empty (warning, not error)
+	if len(config.ExcludeDirs) == 0 {
+		fmt.Println("Warning: exclude_dirs is empty - will scan all directories")
+	}
+
+	// Validate max_file_size format
+	if config.MaxFileSize != "" {
+		_, err := parseFileSize(config.MaxFileSize)
+		if err != nil {
+			return fmt.Errorf("config error: invalid max_file_size '%s': %v", config.MaxFileSize, err)
+		}
+	}
+
+	// Check for duplicate extensions
+	extMap := make(map[string]bool)
+	for _, ext := range config.Extensions {
+		cleanExt := strings.ToLower(strings.TrimSpace(ext))
+		if extMap[cleanExt] {
+			fmt.Printf("Warning: duplicate extension '%s' in config\n", ext)
+		}
+		extMap[cleanExt] = true
+	}
+
+	// Check for duplicate exclude_dirs
+	dirMap := make(map[string]bool)
+	for _, dir := range config.ExcludeDirs {
+		cleanDir := strings.TrimSpace(dir)
+		if dirMap[cleanDir] {
+			fmt.Printf("Warning: duplicate exclude_dir '%s' in config\n", dir)
+		}
+		dirMap[cleanDir] = true
+	}
+
+	return nil
+}
+
+// loadConfig reads and validates the config.json file
+func loadConfig(filename string) (*Config, error) {
+	// Read the file
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("could not read config: %w", err)
+	}
+
+	// Check if file is empty
+	if len(data) == 0 {
+		return nil, fmt.Errorf("config file is empty")
+	}
+
+	// Parse the JSON
+	var config Config
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse config (invalid JSON): %w", err)
+	}
+
+	// Validate the config
+	err = validateConfig(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// parseFileSize converts "100MB" to bytes
+// Returns 0 if empty string (no limit)
+// FIXED: Now checks suffixes in correct order (longest first)
+func parseFileSize(sizeStr string) (int64, error) {
+	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
+
+	// Empty means no limit
+	if sizeStr == "" {
+		return 0, nil
+	}
+
+	// CRITICAL FIX: Check suffixes in order from LONGEST to SHORTEST
+	// This prevents "100MB" from matching "B" before "MB"
+	suffixes := []struct {
+		suffix     string
+		multiplier int64
+	}{
+		{"GB", 1024 * 1024 * 1024}, // Check GB first
+		{"MB", 1024 * 1024},        // Then MB
+		{"KB", 1024},               // Then KB
+		{"B", 1},                   // Then B last
+	}
+
+	for _, s := range suffixes {
+		if strings.HasSuffix(sizeStr, s.suffix) {
+			// Remove suffix and parse number
+			numStr := strings.TrimSuffix(sizeStr, s.suffix)
+			numStr = strings.TrimSpace(numStr) // Remove any spaces
+
+			// Parse the number
+			num, err := strconv.ParseInt(numStr, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid size format '%s': cannot parse number", sizeStr)
+			}
+
+			// Validate reasonable range
+			if num < 0 {
+				return 0, fmt.Errorf("invalid size '%s': size cannot be negative", sizeStr)
+			}
+			if num == 0 {
+				return 0, nil // "0MB" means no limit
+			}
+
+			result := num * s.multiplier
+
+			// Check for overflow
+			if result < 0 {
+				return 0, fmt.Errorf("invalid size '%s': value too large", sizeStr)
+			}
+
+			return result, nil
+		}
+	}
+
+	// No valid suffix found
+	return 0, fmt.Errorf("invalid size format '%s': must end with B, KB, MB, or GB", sizeStr)
+}
+
+// formatBytes converts bytes to human-readable format
+// Example: 52428800 -> "50.00 MB"
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	sizes := []string{"KB", "MB", "GB", "TB"}
+	return fmt.Sprintf("%.2f %s", float64(bytes)/float64(div), sizes[exp])
+}
+
+// shouldExcludeDir checks if a directory should be skipped
+func shouldExcludeDir(dirPath string, excludeDirs []string) bool {
+	dirName := filepath.Base(dirPath)
+
+	for _, excludeDir := range excludeDirs {
+		if dirName == excludeDir {
+			return true
+		}
+	}
+
+	return false
+}
+
+// validateDirectory checks if the path exists and is a directory
+func validateDirectory(dirPath string) error {
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("directory does not exist: %s", dirPath)
+		}
+		return fmt.Errorf("error accessing directory: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", dirPath)
+	}
+
+	return nil
+}
+
+// ============================================================================
+// CARD DETECTION WITH REGEX
+// ============================================================================
+
+// initCardPatterns creates all card detection patterns
+// Each regex handles: formatting (spaces/dashes), length, and issuer identification
+func initCardPatterns() {
+	cardPatterns = []CardPattern{
+		// VISA
+		// Starts with 4
+		// Length: 13, 16, or 19 digits
+		// Handles: 4532015112830366 OR 4532-0151-1283-0366 OR 4532 0151 1283 0366
+		{
+			Name:    "Visa",
+			Pattern: regexp.MustCompile(`\b4\d{3}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?:[\s\-]?\d{3})?(?:[\s\-]?\d{3})?\b`),
+		},
+
+		// MASTERCARD
+		// Starts with 51-55 OR 2221-2720
+		// Length: 16 digits only
+		{
+			Name:    "MasterCard",
+			Pattern: regexp.MustCompile(`\b(?:5[1-5]|222[1-9]|22[3-9]\d|2[3-6]\d{2}|27[01]\d|2720)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// AMERICAN EXPRESS
+		// Starts with 34 or 37
+		// Length: 15 digits only
+		// Format: 3xxx-xxxxxx-xxxxx (different grouping than Visa/MC)
+		{
+			Name:    "Amex",
+			Pattern: regexp.MustCompile(`\b3[47]\d{2}[\s\-]?\d{6}[\s\-]?\d{5}\b`),
+		},
+
+		// DISCOVER
+		// Starts with 6011, 622126-622925, 644-649, or 65
+		// Length: 16 digits only
+		{
+			Name:    "Discover",
+			Pattern: regexp.MustCompile(`\b(?:6011|65\d{2}|64[4-9]\d|622(?:1[2-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))\d{0,2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// DINERS CLUB
+		// Starts with 36, 38, or 300-305
+		// Length: 14 digits only
+		{
+			Name:    "Diners",
+			Pattern: regexp.MustCompile(`\b3(?:0[0-5]|[68]\d)\d{1}[\s\-]?\d{6}[\s\-]?\d{4}\b`),
+		},
+
+		// JCB
+		// Starts with 3528-3589
+		// Length: 16 digits only
+		{
+			Name:    "JCB",
+			Pattern: regexp.MustCompile(`\b35(?:2[89]|[3-8]\d)\d{1}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// CHINA UNIONPAY
+		// Starts with 62
+		// Length: 16-19 digits
+		{
+			Name:    "UnionPay",
+			Pattern: regexp.MustCompile(`\b62\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?:[\s\-]?\d{3})?(?:[\s\-]?\d{3})?\b`),
+		},
+
+		// MAESTRO
+		// Starts with 50, 56-69
+		// Length: 12-19 digits (very flexible)
+		{
+			Name:    "Maestro",
+			Pattern: regexp.MustCompile(`\b(?:5[06789]|6\d)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{1,7}\b`),
+		},
+
+		// RUPAY (India)
+		// Starts with 60, 6521, 6522
+		// Length: 16 digits
+		{
+			Name:    "RuPay",
+			Pattern: regexp.MustCompile(`\b(?:60|6521|6522)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// TROY (Turkey)
+		// Starts with 9792
+		// Length: 16 digits
+		{
+			Name:    "Troy",
+			Pattern: regexp.MustCompile(`\b9792[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// MIR (Russia)
+		// Starts with 2200-2204
+		// Length: 16 digits
+		{
+			Name:    "Mir",
+			Pattern: regexp.MustCompile(`\b220[0-4][\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+	}
+
+	fmt.Printf("✓ Loaded %d card issuer patterns\n", len(cardPatterns))
+}
+
+// cleanDigits extracts only digits from a string
+// Example: "4532-0151-1283-0366" -> "4532015112830366"
+func cleanDigits(text string) string {
+	digits := ""
+	for i := 0; i < len(text); i++ {
+		if text[i] >= '0' && text[i] <= '9' {
+			digits += string(text[i])
+		}
+	}
+	return digits
+}
+
+// findCardsInLine scans one line of text for credit card numbers
+// Returns map: cardNumber -> cardType
+//
+// Process:
+// 1. Try each regex pattern on the line
+// 2. For each match, extract only digits
+// 3. Validate with Luhn algorithm
+// 4. Return valid cards with their types
+func findCardsInLine(line string) map[string]string {
+	foundCards := make(map[string]string)
+
+	// Try each card pattern
+	for _, pattern := range cardPatterns {
+		// Find all matches for this pattern in the line
+		matches := pattern.Pattern.FindAllString(line, -1)
+
+		for _, match := range matches {
+			// Extract only the digits (remove spaces/dashes)
+			cardNumber := cleanDigits(match)
+
+			// Skip if we already found this card
+			if _, exists := foundCards[cardNumber]; exists {
+				continue
+			}
+
+			// Validate with Luhn algorithm (eliminates false positives)
+			if validateLuhn(cardNumber) {
+				foundCards[cardNumber] = pattern.Name
+			}
+		}
+	}
+
+	return foundCards
+}
+
+// ============================================================================
+// LUHN ALGORITHM VALIDATION
+// ============================================================================
+
+// How Luhn Algorithm Works:
+// - Start from the rightmost digit
+// - Double every second digit (from right)
+// - If doubled value > 9, subtract 9
+// - Sum all digits
+// - Valid if sum is divisible by 10
+
+// validateLuhn checks if a card number passes the Luhn algorithm
+// This is a checksum formula used to validate credit card numbers
+func validateLuhn(cardNumber string) bool {
+	// Remove any spaces or dashes that might still be in the number
+	cleaned := ""
+	for i := 0; i < len(cardNumber); i++ {
+		if cardNumber[i] >= '0' && cardNumber[i] <= '9' {
+			cleaned += string(cardNumber[i])
+		}
+	}
+
+	// Need at least 13 digits for a valid card (some cards are 13-19 digits)
+	if len(cleaned) < 13 || len(cleaned) > 19 {
+		return false
+	}
+
+	sum := 0
+	isEven := false
+
+	// Process digits from right to left
+	for i := len(cleaned) - 1; i >= 0; i-- {
+		// Convert character to integer
+		digit := int(cleaned[i] - '0')
+
+		// Every second digit (from right) is doubled
+		if isEven {
+			digit *= 2
+			// If doubled digit is > 9, subtract 9
+			if digit > 9 {
+				digit -= 9
+			}
+		}
+
+		sum += digit
+		isEven = !isEven
+	}
+
+	// Valid if sum is divisible by 10
+	return sum%10 == 0
+}
+
+// maskCardNumber returns a masked version for safe display
+// PCI compliance: Shows only first 6 (BIN) and last 4 digits
+func maskCardNumber(cardNumber string) string {
+	length := len(cardNumber)
+
+	// If card number is too short, just return it
+	if length <= 10 {
+		return cardNumber
+	}
+
+	// Build masked number
+	masked := ""
+
+	// Add first 6 digits (BIN - Bank Identification Number)
+	masked += cardNumber[0:6]
+
+	// Add asterisks for middle digits
+	middleDigits := length - 10 // Total minus first 6 and last 4
+	for i := 0; i < middleDigits; i++ {
+		masked += "*"
+	}
+
+	// Add last 4 digits
+	masked += cardNumber[length-4:]
+
+	return masked
+}
+
+// ============================================================================
+// REPORTING FUNCTIONS
+// ============================================================================
 
 // initReport initializes a new report
 func initReport(directory string, extensions []string) {
@@ -291,185 +658,68 @@ func exportTXT(filename string) error {
 	return os.WriteFile(filename, []byte(content.String()), 0644)
 }
 
-// validateDirectory checks if the path exists and is a directory
-func validateDirectory(dirPath string) error {
-	info, err := os.Stat(dirPath)
+// ============================================================================
+// FILE SCANNING
+// ============================================================================
+
+// scanFileWithCount scans a file and returns number of valid cards found
+func scanFileWithCount(filepath string) int {
+	file, err := os.Open(filepath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("directory does not exist: %s", dirPath)
-		}
-		return fmt.Errorf("error accessing directory: %w", err)
+		return 0
 	}
+	defer file.Close()
 
-	if !info.IsDir() {
-		return fmt.Errorf("path is not a directory: %s", dirPath)
-	}
+	scanner := bufio.NewScanner(file)
+	lineNumber := 0
+	validCount := 0
 
-	return nil
-}
+	// Track cards already found in this file (avoid duplicates)
+	seenCards := make(map[string]bool)
 
-// ============================================================================
-// SIMPLIFIED CARD DETECTION WITH REGEX
-// ============================================================================
+	for scanner.Scan() {
+		lineNumber++
+		line := scanner.Text()
 
-// CardPattern represents a single card issuer's detection pattern
-type CardPattern struct {
-	Name    string         // Card issuer name (e.g., "Visa")
-	Pattern *regexp.Regexp // Regex pattern that handles EVERYTHING
-}
+		// Find all cards in this line using regex + Luhn validation
+		cardsFound := findCardsInLine(line)
 
-// Global patterns - compiled once at startup for performance
-var cardPatterns []CardPattern
-
-// initCardPatterns creates all card detection patterns
-// Each regex handles: formatting (spaces/dashes), length, and issuer identification
-func initCardPatterns() {
-	cardPatterns = []CardPattern{
-		// VISA
-		// Starts with 4
-		// Length: 13, 16, or 19 digits
-		// Handles: 4532015112830366 OR 4532-0151-1283-0366 OR 4532 0151 1283 0366
-		{
-			Name:    "Visa",
-			Pattern: regexp.MustCompile(`\b4\d{3}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?:[\s\-]?\d{3})?(?:[\s\-]?\d{3})?\b`),
-		},
-
-		// MASTERCARD
-		// Starts with 51-55 OR 2221-2720
-		// Length: 16 digits only
-		{
-			Name:    "MasterCard",
-			Pattern: regexp.MustCompile(`\b(?:5[1-5]|222[1-9]|22[3-9]\d|2[3-6]\d{2}|27[01]\d|2720)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
-		},
-
-		// AMERICAN EXPRESS
-		// Starts with 34 or 37
-		// Length: 15 digits only
-		// Format: 3xxx-xxxxxx-xxxxx (different grouping than Visa/MC)
-		{
-			Name:    "Amex",
-			Pattern: regexp.MustCompile(`\b3[47]\d{2}[\s\-]?\d{6}[\s\-]?\d{5}\b`),
-		},
-
-		// DISCOVER
-		// Starts with 6011, 622126-622925, 644-649, or 65
-		// Length: 16 digits only
-		{
-			Name:    "Discover",
-			Pattern: regexp.MustCompile(`\b(?:6011|65\d{2}|64[4-9]\d|622(?:1[2-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))\d{0,2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
-		},
-
-		// DINERS CLUB
-		// Starts with 36, 38, or 300-305
-		// Length: 14 digits only
-		{
-			Name:    "Diners",
-			Pattern: regexp.MustCompile(`\b3(?:0[0-5]|[68]\d)\d{1}[\s\-]?\d{6}[\s\-]?\d{4}\b`),
-		},
-
-		// JCB
-		// Starts with 3528-3589
-		// Length: 16 digits only
-		{
-			Name:    "JCB",
-			Pattern: regexp.MustCompile(`\b35(?:2[89]|[3-8]\d)\d{1}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
-		},
-
-		// CHINA UNIONPAY
-		// Starts with 62
-		// Length: 16-19 digits
-		{
-			Name:    "UnionPay",
-			Pattern: regexp.MustCompile(`\b62\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?:[\s\-]?\d{3})?(?:[\s\-]?\d{3})?\b`),
-		},
-
-		// MAESTRO
-		// Starts with 50, 56-69
-		// Length: 12-19 digits (very flexible)
-		{
-			Name:    "Maestro",
-			Pattern: regexp.MustCompile(`\b(?:5[06789]|6\d)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{1,7}\b`),
-		},
-
-		// RUPAY (India)
-		// Starts with 60, 6521, 6522
-		// Length: 16 digits
-		{
-			Name:    "RuPay",
-			Pattern: regexp.MustCompile(`\b(?:60|6521|6522)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
-		},
-
-		// TROY (Turkey)
-		// Starts with 9792
-		// Length: 16 digits
-		{
-			Name:    "Troy",
-			Pattern: regexp.MustCompile(`\b9792[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
-		},
-
-		// MIR (Russia)
-		// Starts with 2200-2204
-		// Length: 16 digits
-		{
-			Name:    "Mir",
-			Pattern: regexp.MustCompile(`\b220[0-4][\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
-		},
-	}
-
-	fmt.Printf("✓ Loaded %d card issuer patterns\n", len(cardPatterns))
-}
-
-// cleanDigits extracts only digits from a string
-// Example: "4532-0151-1283-0366" -> "4532015112830366"
-func cleanDigits(text string) string {
-	digits := ""
-	for i := 0; i < len(text); i++ {
-		if text[i] >= '0' && text[i] <= '9' {
-			digits += string(text[i])
-		}
-	}
-	return digits
-}
-
-// findCardsInLine scans one line of text for credit card numbers
-// Returns map: cardNumber -> cardType
-//
-// Process:
-// 1. Try each regex pattern on the line
-// 2. For each match, extract only digits
-// 3. Validate with Luhn algorithm
-// 4. Return valid cards with their types
-func findCardsInLine(line string) map[string]string {
-	foundCards := make(map[string]string)
-
-	// Try each card pattern
-	for _, pattern := range cardPatterns {
-		// Find all matches for this pattern in the line
-		matches := pattern.Pattern.FindAllString(line, -1)
-
-		for _, match := range matches {
-			// Extract only the digits (remove spaces/dashes)
-			cardNumber := cleanDigits(match)
-
-			// Skip if we already found this card
-			if _, exists := foundCards[cardNumber]; exists {
+		// Process each valid card found
+		for cardNumber, cardType := range cardsFound {
+			// Skip if we already reported this card in this file
+			if seenCards[cardNumber] {
 				continue
 			}
+			seenCards[cardNumber] = true
+			validCount++
 
-			// Validate with Luhn algorithm (eliminates false positives)
-			if validateLuhn(cardNumber) {
-				foundCards[cardNumber] = pattern.Name
-			}
+			// Mask the card number for safe display (PCI compliance)
+			maskedCard := maskCardNumber(cardNumber)
+
+			// Add to report
+			addFinding(filepath, lineNumber, cardType, maskedCard)
 		}
 	}
 
-	return foundCards
+	return validCount
 }
+
+// ============================================================================
+// DIRECTORY SCANNING
+// ============================================================================
 
 // scanDirectoryWithOptionsConcurrent scans directory with goroutines
 func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, extensions []string, excludeDirs []string, maxFileSize int64, workers int) error {
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
 	fmt.Printf("Workers: %d (concurrent scanning enabled)\n", workers)
+
+	// Show max file size setting
+	if maxFileSize > 0 {
+		fmt.Printf("Max file size: %s\n", formatBytes(maxFileSize))
+	} else {
+		fmt.Printf("Max file size: unlimited\n")
+	}
+
 	fmt.Println(strings.Repeat("=", 60))
 
 	// Initialize report
@@ -504,10 +754,16 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 		totalFiles++
 		mu.Unlock()
 
-		// Skip large files
+		// Skip large files BEFORE adding to scan list
 		if maxFileSize > 0 && info.Size() > maxFileSize {
 			mu.Lock()
 			skippedFiles++
+			// Debug logging for skipped files (show first 5)
+			if skippedFiles <= 5 {
+				fmt.Printf("⊘ Skipping (too large): %s (%s)\n",
+					filepath.Base(path),
+					formatBytes(info.Size()))
+			}
 			mu.Unlock()
 			return nil
 		}
@@ -526,6 +782,11 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 
 	if err != nil {
 		return fmt.Errorf("directory walk failed: %w", err)
+	}
+
+	// Show skipped file summary
+	if skippedFiles > 5 {
+		fmt.Printf("⊘ ... and %d more files skipped (too large)\n", skippedFiles-5)
 	}
 
 	// Create channels for work distribution
@@ -582,7 +843,7 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 	fmt.Printf("  Total files: %d\n", totalFiles)
 	fmt.Printf("  Scanned: %d\n", scannedFiles)
 	if skippedFiles > 0 {
-		fmt.Printf("  Skipped: %d\n", skippedFiles)
+		fmt.Printf("  Skipped (size): %d\n", skippedFiles)
 	}
 	fmt.Printf("  Cards found: %d\n", foundCards)
 
@@ -608,6 +869,14 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []string, excludeDirs []string, maxFileSize int64) error {
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
 	fmt.Printf("Workers: 1 (single-threaded mode)\n")
+
+	// Show max file size
+	if maxFileSize > 0 {
+		fmt.Printf("Max file size: %s\n", formatBytes(maxFileSize))
+	} else {
+		fmt.Printf("Max file size: unlimited\n")
+	}
+
 	fmt.Println(strings.Repeat("=", 60))
 
 	// Initialize report
@@ -642,6 +911,12 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		// Skip if file is too big
 		if maxFileSize > 0 && info.Size() > maxFileSize {
 			skippedFiles++
+			// Debug logging
+			if skippedFiles <= 5 {
+				fmt.Printf("⊘ Skipping (too large): %s (%s)\n",
+					filepath.Base(path),
+					formatBytes(info.Size()))
+			}
 			return nil
 		}
 
@@ -675,6 +950,11 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		return nil
 	})
 
+	// Show skipped summary
+	if skippedFiles > 5 {
+		fmt.Printf("\n⊘ ... and %d more files skipped (too large)\n", skippedFiles-5)
+	}
+
 	// Clear progress line
 	fmt.Print("\r" + strings.Repeat(" ", 60) + "\r")
 
@@ -694,7 +974,7 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	fmt.Printf("  Total files: %d\n", totalFiles)
 	fmt.Printf("  Scanned: %d\n", scannedFiles)
 	if skippedFiles > 0 {
-		fmt.Printf("  Skipped: %d\n", skippedFiles)
+		fmt.Printf("  Skipped (size): %d\n", skippedFiles)
 	}
 	fmt.Printf("  Cards found: %d\n", foundCards)
 
@@ -716,123 +996,9 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	return nil
 }
 
-// scanFileWithCount scans a file and returns number of valid cards found
-func scanFileWithCount(filepath string) int {
-	file, err := os.Open(filepath)
-	if err != nil {
-		return 0
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	lineNumber := 0
-	validCount := 0
-
-	// Track cards already found in this file (avoid duplicates)
-	seenCards := make(map[string]bool)
-
-	for scanner.Scan() {
-		lineNumber++
-		line := scanner.Text()
-
-		// Find all cards in this line using regex + Luhn validation
-		cardsFound := findCardsInLine(line)
-
-		// Process each valid card found
-		for cardNumber, cardType := range cardsFound {
-			// Skip if we already reported this card in this file
-			if seenCards[cardNumber] {
-				continue
-			}
-			seenCards[cardNumber] = true
-			validCount++
-
-			// Mask the card number for safe display (PCI compliance)
-			maskedCard := maskCardNumber(cardNumber)
-
-			// Add to report
-			addFinding(filepath, lineNumber, cardType, maskedCard)
-		}
-	}
-
-	return validCount
-}
-
-//How Luhn Algorithm Works:
-// - Start from the rightmost digit
-// - Double every second digit (from right)
-// - If doubled value > 9, subtract 9
-// - Sum all digits
-// - Valid if sum is divisible by 10
-
-// validate Luhn checks if a card number passes the Luhn algorithm
-// This is a checksum formula used to validate credit card numbers
-func validateLuhn(cardNumber string) bool {
-	// Remove any spaces or dashes that might still be in the number
-	cleaned := ""
-	for i := 0; i < len(cardNumber); i++ {
-		if cardNumber[i] >= '0' && cardNumber[i] <= '9' {
-			cleaned += string(cardNumber[i])
-		}
-	}
-
-	// Need at least 13 digits for a valid card (some cards are 13-19 digits)
-	if len(cleaned) < 13 || len(cleaned) > 19 {
-		return false
-	}
-
-	sum := 0
-	isEven := false
-
-	// Process digits from right to left
-	for i := len(cleaned) - 1; i >= 0; i-- {
-		// Convert character to integer
-		digit := int(cleaned[i] - '0')
-
-		// Every second digit (from right) is doubled
-		if isEven {
-			digit *= 2
-			// If doubled digit is > 9, subtract 9
-			if digit > 9 {
-				digit -= 9
-			}
-		}
-
-		sum += digit
-		isEven = !isEven
-	}
-
-	// Valid if sum is divisible by 10
-	return sum%10 == 0
-}
-
-// maskCardNumber returns a masked version for safe display
-// PCI compliance: Shows only first 6 (BIN) and last 4 digits
-func maskCardNumber(cardNumber string) string {
-	length := len(cardNumber)
-
-	// If card number is too short, just return it
-	if length <= 10 {
-		return cardNumber
-	}
-
-	// Build masked number
-	masked := ""
-
-	// Add first 6 digits (BIN - Bank Identification Number)
-	masked += cardNumber[0:6]
-
-	// Add asterisks for middle digits
-	middleDigits := length - 10 // Total minus first 6 and last 4
-	for i := 0; i < middleDigits; i++ {
-		masked += "*"
-	}
-
-	// Add last 4 digits
-	masked += cardNumber[length-4:]
-
-	return masked
-}
+// ============================================================================
+// UI FUNCTIONS
+// ============================================================================
 
 // showHelp displays usage information
 func showHelp() {
@@ -868,6 +1034,10 @@ Performance:
     Max workers: CPU cores (automatically limited)
     More workers = faster scanning (2-4x speed improvement)
 
+Supported Card Issuers (11):
+    Visa, Mastercard, Amex, Discover, Diners Club, JCB,
+    UnionPay, Maestro, RuPay, Troy, Mir
+
 Configuration:
     Edit config.json to change default settings.
     CLI flags always override config values.
@@ -896,6 +1066,10 @@ func displayBanner() {
     `)
 }
 
+// ============================================================================
+// MAIN
+// ============================================================================
+
 func main() {
 	// Define command line flags
 	pathFlag := flag.String("path", "", "Directory to scan")
@@ -921,18 +1095,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Display banner
+	displayBanner()
+
 	// Initialize card detection patterns (MUST be called before scanning)
 	initCardPatterns()
 
-	// Load config file
+	// Load config file (use defaults if it fails)
 	config, err := loadConfig("config.json")
 	if err != nil {
 		fmt.Printf("Warning: Could not load config.json: %v\n", err)
 		fmt.Println("Using default settings\n")
 		config = &Config{
-			Extensions:  []string{"txt", "log", "csv"},
+			Extensions:  []string{".txt", ".log", ".csv"},
 			ExcludeDirs: []string{".git", "node_modules"},
-			MaxFileSize: "100MB",
+			MaxFileSize: "50MB",
 		}
 	}
 
@@ -978,9 +1155,6 @@ func main() {
 		fmt.Printf("Warning: workers (%d) exceeds CPU cores (%d), limiting to %d\n", workers, numCPU, numCPU)
 		workers = numCPU
 	}
-
-	// Display banner
-	displayBanner()
 
 	// Validate directory exists
 	err = validateDirectory(*pathFlag)
