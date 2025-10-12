@@ -8,6 +8,7 @@ import (
 	"fmt" // for printing
 	"os"  // operating system stuff (Stdin)
 	"path/filepath"
+	"regexp"  // For regex pattern matching
 	"runtime" //to get CPU count
 	"strconv" //for converting strings to numbers
 	"strings"
@@ -307,69 +308,162 @@ func validateDirectory(dirPath string) error {
 	return nil
 }
 
-// findCardNumber searches for credit card patterns (13-19 consecutive digits)
-// Different card types have different lengths:
-// - Visa: 13, 16, or 19 digits
-// - MasterCard: 16 digits
-// - Amex: 15 digits
-// - Discover: 16 digits
-// - Diners: 14 digits
-// It handles common formats like spaces and dashes between digit groups
-func findCardNumber(text string) string {
-	consecutiveDigits := ""
+// ============================================================================
+// SIMPLIFIED CARD DETECTION WITH REGEX
+// ============================================================================
 
-	// Iterate through each character in the text
+// CardPattern represents a single card issuer's detection pattern
+type CardPattern struct {
+	Name    string         // Card issuer name (e.g., "Visa")
+	Pattern *regexp.Regexp // Regex pattern that handles EVERYTHING
+}
+
+// Global patterns - compiled once at startup for performance
+var cardPatterns []CardPattern
+
+// initCardPatterns creates all card detection patterns
+// Each regex handles: formatting (spaces/dashes), length, and issuer identification
+func initCardPatterns() {
+	cardPatterns = []CardPattern{
+		// VISA
+		// Starts with 4
+		// Length: 13, 16, or 19 digits
+		// Handles: 4532015112830366 OR 4532-0151-1283-0366 OR 4532 0151 1283 0366
+		{
+			Name:    "Visa",
+			Pattern: regexp.MustCompile(`\b4\d{3}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?:[\s\-]?\d{3})?(?:[\s\-]?\d{3})?\b`),
+		},
+
+		// MASTERCARD
+		// Starts with 51-55 OR 2221-2720
+		// Length: 16 digits only
+		{
+			Name:    "MasterCard",
+			Pattern: regexp.MustCompile(`\b(?:5[1-5]|222[1-9]|22[3-9]\d|2[3-6]\d{2}|27[01]\d|2720)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// AMERICAN EXPRESS
+		// Starts with 34 or 37
+		// Length: 15 digits only
+		// Format: 3xxx-xxxxxx-xxxxx (different grouping than Visa/MC)
+		{
+			Name:    "Amex",
+			Pattern: regexp.MustCompile(`\b3[47]\d{2}[\s\-]?\d{6}[\s\-]?\d{5}\b`),
+		},
+
+		// DISCOVER
+		// Starts with 6011, 622126-622925, 644-649, or 65
+		// Length: 16 digits only
+		{
+			Name:    "Discover",
+			Pattern: regexp.MustCompile(`\b(?:6011|65\d{2}|64[4-9]\d|622(?:1[2-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))\d{0,2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// DINERS CLUB
+		// Starts with 36, 38, or 300-305
+		// Length: 14 digits only
+		{
+			Name:    "Diners",
+			Pattern: regexp.MustCompile(`\b3(?:0[0-5]|[68]\d)\d{1}[\s\-]?\d{6}[\s\-]?\d{4}\b`),
+		},
+
+		// JCB
+		// Starts with 3528-3589
+		// Length: 16 digits only
+		{
+			Name:    "JCB",
+			Pattern: regexp.MustCompile(`\b35(?:2[89]|[3-8]\d)\d{1}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// CHINA UNIONPAY
+		// Starts with 62
+		// Length: 16-19 digits
+		{
+			Name:    "UnionPay",
+			Pattern: regexp.MustCompile(`\b62\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?:[\s\-]?\d{3})?(?:[\s\-]?\d{3})?\b`),
+		},
+
+		// MAESTRO
+		// Starts with 50, 56-69
+		// Length: 12-19 digits (very flexible)
+		{
+			Name:    "Maestro",
+			Pattern: regexp.MustCompile(`\b(?:5[06789]|6\d)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{1,7}\b`),
+		},
+
+		// RUPAY (India)
+		// Starts with 60, 6521, 6522
+		// Length: 16 digits
+		{
+			Name:    "RuPay",
+			Pattern: regexp.MustCompile(`\b(?:60|6521|6522)\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// TROY (Turkey)
+		// Starts with 9792
+		// Length: 16 digits
+		{
+			Name:    "Troy",
+			Pattern: regexp.MustCompile(`\b9792[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+
+		// MIR (Russia)
+		// Starts with 2200-2204
+		// Length: 16 digits
+		{
+			Name:    "Mir",
+			Pattern: regexp.MustCompile(`\b220[0-4][\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`),
+		},
+	}
+
+	fmt.Printf("✓ Loaded %d card issuer patterns\n", len(cardPatterns))
+}
+
+// cleanDigits extracts only digits from a string
+// Example: "4532-0151-1283-0366" -> "4532015112830366"
+func cleanDigits(text string) string {
+	digits := ""
 	for i := 0; i < len(text); i++ {
-		char := text[i]
+		if text[i] >= '0' && text[i] <= '9' {
+			digits += string(text[i])
+		}
+	}
+	return digits
+}
 
-		if char >= '0' && char <= '9' {
-			// Found a digit, add it to our collection
-			consecutiveDigits = consecutiveDigits + string(char)
+// findCardsInLine scans one line of text for credit card numbers
+// Returns map: cardNumber -> cardType
+//
+// Process:
+// 1. Try each regex pattern on the line
+// 2. For each match, extract only digits
+// 3. Validate with Luhn algorithm
+// 4. Return valid cards with their types
+func findCardsInLine(line string) map[string]string {
+	foundCards := make(map[string]string)
 
-			// Check if we have a valid card length (13-19 digits)
-			length := len(consecutiveDigits)
+	// Try each card pattern
+	for _, pattern := range cardPatterns {
+		// Find all matches for this pattern in the line
+		matches := pattern.Pattern.FindAllString(line, -1)
 
-			// If we have between 13-19 digits, check what comes next
-			if length >= 13 && length <= 19 {
-				// Look ahead to see if there are more digits
-				if i+1 < len(text) && text[i+1] >= '0' && text[i+1] <= '9' {
-					// More digits coming, keep collecting
-					continue
-				}
+		for _, match := range matches {
+			// Extract only the digits (remove spaces/dashes)
+			cardNumber := cleanDigits(match)
 
-				// No more digits, return what we have if it's valid length
-				return consecutiveDigits
+			// Skip if we already found this card
+			if _, exists := foundCards[cardNumber]; exists {
+				continue
 			}
 
-		} else if char == ' ' || char == '-' {
-			// Space or dash - could be formatting in a card number
-			// Only reset if we haven't started collecting digits
-			if len(consecutiveDigits) == 0 {
-				consecutiveDigits = ""
+			// Validate with Luhn algorithm (eliminates false positives)
+			if validateLuhn(cardNumber) {
+				foundCards[cardNumber] = pattern.Name
 			}
-			// Otherwise, continue collecting (skip the separator)
-
-		} else {
-			// Any other character breaks the sequence
-			// Check if we had a valid length before resetting
-			length := len(consecutiveDigits)
-			if length >= 13 && length <= 19 {
-				return consecutiveDigits
-			}
-
-			// Reset for next potential card
-			consecutiveDigits = ""
 		}
 	}
 
-	// Check final collection at end of string
-	length := len(consecutiveDigits)
-	if length >= 13 && length <= 19 {
-		return consecutiveDigits
-	}
-
-	// No valid card number found
-	return ""
+	return foundCards
 }
 
 // scanDirectoryWithOptionsConcurrent scans directory with goroutines
@@ -634,18 +728,29 @@ func scanFileWithCount(filepath string) int {
 	lineNumber := 0
 	validCount := 0
 
+	// Track cards already found in this file (avoid duplicates)
+	seenCards := make(map[string]bool)
+
 	for scanner.Scan() {
 		lineNumber++
 		line := scanner.Text()
 
-		cardNumber := findCardNumber(line)
-		if cardNumber != "" && validateLuhn(cardNumber) {
+		// Find all cards in this line using regex + Luhn validation
+		cardsFound := findCardsInLine(line)
+
+		// Process each valid card found
+		for cardNumber, cardType := range cardsFound {
+			// Skip if we already reported this card in this file
+			if seenCards[cardNumber] {
+				continue
+			}
+			seenCards[cardNumber] = true
 			validCount++
 
-			cardType := getCardType(cardNumber)
+			// Mask the card number for safe display (PCI compliance)
 			maskedCard := maskCardNumber(cardNumber)
 
-			// Add to report (no console output - controlled by caller)
+			// Add to report
 			addFinding(filepath, lineNumber, cardType, maskedCard)
 		}
 	}
@@ -699,77 +804,6 @@ func validateLuhn(cardNumber string) bool {
 
 	// Valid if sum is divisible by 10
 	return sum%10 == 0
-}
-
-// getCardType identifies the card issuer based on the card number
-func getCardType(cardNumber string) string {
-	length := len(cardNumber)
-
-	// Check length is valid for cards
-	if length < 13 || length > 19 {
-		return "Unknown"
-	}
-
-	// Check first digits for card type
-	firstDigit := cardNumber[0]
-	firstTwo := cardNumber[0:2]
-	firstFour := ""
-	if len(cardNumber) >= 4 {
-		firstFour = cardNumber[0:4]
-	}
-
-	// Visa: Starts with 4 (13, 16, or 19 digits)
-	if firstDigit == '4' {
-		if length == 13 || length == 16 || length == 19 {
-			return "Visa"
-		}
-		return "Unknown" // Wrong length for Visa
-	}
-
-	// MasterCard: Starts with 51-55 or 2221-2720 (16 digits only)
-	if (firstTwo >= "51" && firstTwo <= "55") ||
-		(firstFour >= "2221" && firstFour <= "2720") {
-		if length == 16 {
-			return "MasterCard"
-		}
-		return "Unknown" // Wrong length for MasterCard
-	}
-
-	// American Express: Starts with 34 or 37 (15 digits only)
-	if firstTwo == "34" || firstTwo == "37" {
-		if length == 15 {
-			return "Amex"
-		}
-		return "Unknown" // Wrong length for Amex
-	}
-
-	// Discover: Starts with 6011, 644-649, 65 (16 digits only)
-	if firstFour == "6011" ||
-		(firstTwo >= "64" && firstTwo <= "65") {
-		if length == 16 {
-			return "Discover"
-		}
-		return "Unknown"
-	}
-
-	// Diners Club: Starts with 36, 38, or 300-305 (14 digits)
-	if firstTwo == "36" || firstTwo == "38" ||
-		(firstFour >= "3000" && firstFour <= "3059") {
-		if length == 14 {
-			return "Diners"
-		}
-		return "Unknown"
-	}
-
-	// JCB: Starts with 3528-3589 (16 digits)
-	if firstFour >= "3528" && firstFour <= "3589" {
-		if length == 16 {
-			return "JCB"
-		}
-		return "Unknown"
-	}
-
-	return "Unknown"
 }
 
 // maskCardNumber returns a masked version for safe display
@@ -887,7 +921,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load config file (use defaults if it fails)
+	// Initialize card detection patterns (MUST be called before scanning)
+	initCardPatterns()
+
+	// Load config file
 	config, err := loadConfig("config.json")
 	if err != nil {
 		fmt.Printf("Warning: Could not load config.json: %v\n", err)
