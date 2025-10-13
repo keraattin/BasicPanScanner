@@ -95,7 +95,10 @@ var cardPatterns []CardPattern
 // ============================================================================
 
 // validateConfig checks if config values are valid
+// Returns error for critical issues, prints warnings for non-critical ones
 func validateConfig(config *Config) error {
+	warningCount := 0
+
 	// Check if extensions list is empty
 	if len(config.Extensions) == 0 {
 		return fmt.Errorf("config error: extensions list cannot be empty")
@@ -103,7 +106,8 @@ func validateConfig(config *Config) error {
 
 	// Check if exclude_dirs list is empty (warning, not error)
 	if len(config.ExcludeDirs) == 0 {
-		fmt.Println("Warning: exclude_dirs is empty - will scan all directories")
+		fmt.Println("⚠ Warning: exclude_dirs is empty - will scan all directories")
+		warningCount++
 	}
 
 	// Validate max_file_size format
@@ -116,22 +120,72 @@ func validateConfig(config *Config) error {
 
 	// Check for duplicate extensions
 	extMap := make(map[string]bool)
+	duplicateExts := []string{}
 	for _, ext := range config.Extensions {
 		cleanExt := strings.ToLower(strings.TrimSpace(ext))
+
+		// Check for empty extensions
+		if cleanExt == "" {
+			fmt.Println("⚠ Warning: found empty extension in config, ignoring")
+			warningCount++
+			continue
+		}
+
 		if extMap[cleanExt] {
-			fmt.Printf("Warning: duplicate extension '%s' in config\n", ext)
+			duplicateExts = append(duplicateExts, cleanExt)
 		}
 		extMap[cleanExt] = true
 	}
 
+	if len(duplicateExts) > 0 {
+		fmt.Printf("⚠ Warning: duplicate extensions found: %v\n", duplicateExts)
+		fmt.Println("  Tip: Edit config.json to remove duplicates")
+		warningCount++
+	}
+
 	// Check for duplicate exclude_dirs
 	dirMap := make(map[string]bool)
+	duplicateDirs := []string{}
 	for _, dir := range config.ExcludeDirs {
 		cleanDir := strings.TrimSpace(dir)
+
+		// Check for empty directories
+		if cleanDir == "" {
+			fmt.Println("⚠ Warning: found empty exclude_dir in config, ignoring")
+			warningCount++
+			continue
+		}
+
 		if dirMap[cleanDir] {
-			fmt.Printf("Warning: duplicate exclude_dir '%s' in config\n", dir)
+			duplicateDirs = append(duplicateDirs, cleanDir)
 		}
 		dirMap[cleanDir] = true
+	}
+
+	if len(duplicateDirs) > 0 {
+		fmt.Printf("⚠ Warning: duplicate exclude_dirs found: %v\n", duplicateDirs)
+		fmt.Println("  Tip: Edit config.json to remove duplicates")
+		warningCount++
+	}
+
+	// Check for suspicious file extensions (missing dot)
+	suspiciousExts := []string{}
+	for _, ext := range config.Extensions {
+		cleanExt := strings.TrimSpace(ext)
+		if cleanExt != "" && !strings.HasPrefix(cleanExt, ".") && len(cleanExt) > 1 {
+			suspiciousExts = append(suspiciousExts, cleanExt)
+		}
+	}
+
+	if len(suspiciousExts) > 0 && len(suspiciousExts) <= 5 {
+		fmt.Printf("⚠ Warning: extensions without dot found: %v\n", suspiciousExts)
+		fmt.Println("  Note: Dots will be added automatically")
+		warningCount++
+	}
+
+	// Summary
+	if warningCount > 0 {
+		fmt.Printf("\n✓ Config loaded with %d warning(s)\n\n", warningCount)
 	}
 
 	return nil
