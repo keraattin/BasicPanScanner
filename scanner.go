@@ -4,6 +4,7 @@ import (
 	"bufio" // buffered I/O for reading input
 	"encoding/csv"
 	"encoding/json"
+	"encoding/xml"
 	"flag"
 	"fmt" // for printing
 	"os"  // operating system stuff (Stdin)
@@ -29,22 +30,22 @@ type Config struct {
 
 // Report is the common structure for all export formats
 type Report struct {
-	ScanDate     time.Time
-	Directory    string
-	Extensions   []string
-	Duration     time.Duration
-	TotalFiles   int
-	ScannedFiles int
-	Findings     []CardFinding
+	ScanDate     time.Time     `json:"scan_date" xml:"ScanDate"`
+	Directory    string        `json:"directory" xml:"Directory"`
+	Extensions   []string      `json:"extensions" xml:"Extensions>Extension"`
+	Duration     time.Duration `json:"duration" xml:"Duration"`
+	TotalFiles   int           `json:"total_files" xml:"TotalFiles"`
+	ScannedFiles int           `json:"scanned_files" xml:"ScannedFiles"`
+	Findings     []CardFinding `json:"findings" xml:"Findings>Finding"`
 }
 
 // CardFinding represents a single credit card finding
 type CardFinding struct {
-	FilePath   string
-	LineNumber int
-	CardType   string
-	MaskedCard string
-	Timestamp  time.Time
+	FilePath   string    `json:"file_path" xml:"FilePath"`
+	LineNumber int       `json:"line_number" xml:"LineNumber"`
+	CardType   string    `json:"card_type" xml:"CardType"`
+	MaskedCard string    `json:"masked_card" xml:"MaskedCard"`
+	Timestamp  time.Time `json:"timestamp" xml:"Timestamp"`
 }
 
 // CardPattern represents a single card issuer's detection pattern
@@ -533,6 +534,8 @@ func exportReport(filename string) error {
 		return exportTXT(filename)
 	case ".html":
 		return exportHTML(filename)
+	case ".xml":
+		return exportXML(filename)
 	default:
 		return fmt.Errorf("unsupported format: %s", ext)
 	}
@@ -545,6 +548,52 @@ func exportJSON(filename string) error {
 		return err
 	}
 	return os.WriteFile(filename, data, 0644)
+}
+
+// exportXML exports report as XML
+// XML is commonly used in enterprise systems and data interchange
+func exportXML(filename string) error {
+	// Create a wrapper struct for proper XML root element
+	// This gives us a clean <ScanReport> root tag
+	type XMLReport struct {
+		XMLName xml.Name `xml:"ScanReport"`
+		Version string   `xml:"version,attr"` // Add version as attribute
+		*Report          // Embed the Report struct
+	}
+
+	// Wrap our report with XML metadata
+	xmlReport := XMLReport{
+		Version: "1.1.0",
+		Report:  currentReport,
+	}
+
+	// Create the file
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Write XML header
+	// This tells parsers that it's UTF-8 encoded XML
+	_, err = file.WriteString(xml.Header)
+	if err != nil {
+		return err
+	}
+
+	// Create XML encoder with indentation for readability
+	encoder := xml.NewEncoder(file)
+	encoder.Indent("", "  ") // Use 2 spaces for indentation
+
+	// Marshal and write the data
+	err = encoder.Encode(xmlReport)
+	if err != nil {
+		return err
+	}
+
+	// Add final newline for clean file ending
+	_, err = file.WriteString("\n")
+	return err
 }
 
 // exportCSV exports report as CSV
@@ -1000,7 +1049,6 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 // UI FUNCTIONS
 // ============================================================================
 
-// showHelp displays usage information
 func showHelp() {
 	fmt.Println(`
 BasicPanScanner v1.1.0 - PCI Compliance Scanner
@@ -1010,7 +1058,7 @@ Required:
     -path <directory>      Directory to scan
 
 Options:
-    -output <file>         Save results (.json, .csv, .html, .txt)
+    -output <file>         Save results (.json, .csv, .html, .txt, .xml)
     -ext <list>           Extensions to scan (default: from config)
     -exclude <list>       Directories to skip (default: from config)
     -workers <n>          Number of concurrent workers (default: CPU/2, max: CPU cores)
@@ -1026,7 +1074,10 @@ Examples:
     # Single-threaded scan
     ./scanner -path /var/log -workers 1
 
-    # Full scan with output
+    # Full scan with XML output
+    ./scanner -path /data -workers 4 -output report.xml
+
+    # Full scan with JSON output
     ./scanner -path /data -workers 4 -output report.json
 
 Performance:
@@ -1043,10 +1094,11 @@ Configuration:
     CLI flags always override config values.
 
 Export Formats:
-    .json  - JSON format
-    .csv   - CSV format
-    .html  - HTML format
-    .txt   - Text format
+    .json  - JSON format (machine-readable)
+    .csv   - CSV format (spreadsheet import)
+    .txt   - Plain text format (human-readable)
+    .html  - HTML format (browser viewing)
+    .xml   - XML format (enterprise systems)
 `)
 }
 
