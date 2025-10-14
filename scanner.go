@@ -23,9 +23,22 @@ import (
 
 // Config holds our configuration settings
 type Config struct {
-	Extensions  []string `json:"extensions"`
+	// Scan mode determines how extensions are interpreted
+	// "whitelist" = scan ONLY these extensions
+	// "blacklist" = scan everything EXCEPT these extensions
+	ScanMode string `json:"scan_mode"`
+
+	// Whitelist: Only these extensions will be scanned (when mode = "whitelist")
+	WhitelistExtensions []string `json:"whitelist_extensions"`
+
+	// Blacklist: These extensions will be SKIPPED (when mode = "blacklist")
+	BlacklistExtensions []string `json:"blacklist_extensions"`
+
+	// Directory exclusions (always applied regardless of mode)
 	ExcludeDirs []string `json:"exclude_dirs"`
-	MaxFileSize string   `json:"max_file_size"`
+
+	// Maximum file size to scan (e.g., "50MB")
+	MaxFileSize string `json:"max_file_size"`
 }
 
 // Report is the common structure for all export formats
@@ -95,19 +108,96 @@ var cardPatterns []CardPattern
 // ============================================================================
 
 // validateConfig checks if config values are valid
-// Returns error for critical issues, prints warnings for non-critical ones
+// NEW: Validates scan_mode and ensures appropriate extension lists are provided
 func validateConfig(config *Config) error {
 	warningCount := 0
 
-	// Check if extensions list is empty
-	if len(config.Extensions) == 0 {
-		return fmt.Errorf("config error: extensions list cannot be empty")
+	// Validate scan mode (NEW)
+	validModes := map[string]bool{
+		"whitelist": true,
+		"blacklist": true,
 	}
 
-	// Check if exclude_dirs list is empty (warning, not error)
-	if len(config.ExcludeDirs) == 0 {
-		fmt.Println("⚠ Warning: exclude_dirs is empty - will scan all directories")
+	if config.ScanMode == "" {
+		fmt.Println("⚠ Warning: scan_mode not set, defaulting to 'blacklist'")
+		config.ScanMode = "blacklist"
 		warningCount++
+	} else if !validModes[config.ScanMode] {
+		return fmt.Errorf("config error: scan_mode must be 'whitelist' or 'blacklist', got '%s'", config.ScanMode)
+	}
+
+	// Validate appropriate extension list is provided (NEW)
+	if config.ScanMode == "whitelist" && len(config.WhitelistExtensions) == 0 {
+		return fmt.Errorf("config error: whitelist mode requires whitelist_extensions to be set")
+	}
+
+	if config.ScanMode == "blacklist" && len(config.BlacklistExtensions) == 0 {
+		fmt.Println("⚠ Warning: blacklist mode with empty blacklist means ALL files will be scanned")
+		fmt.Println("  Tip: Add common binary/media extensions to blacklist for better performance")
+		warningCount++
+	}
+
+	// Check for duplicate extensions in whitelist (NEW)
+	if len(config.WhitelistExtensions) > 0 {
+		extMap := make(map[string]bool)
+		duplicates := []string{}
+		for _, ext := range config.WhitelistExtensions {
+			cleanExt := strings.ToLower(strings.TrimSpace(ext))
+			if cleanExt == "" {
+				continue
+			}
+			if extMap[cleanExt] {
+				duplicates = append(duplicates, cleanExt)
+			}
+			extMap[cleanExt] = true
+		}
+		if len(duplicates) > 0 {
+			fmt.Printf("⚠ Warning: duplicate extensions in whitelist: %v\n", duplicates)
+			warningCount++
+		}
+	}
+
+	// Check for duplicate extensions in blacklist (NEW)
+	if len(config.BlacklistExtensions) > 0 {
+		extMap := make(map[string]bool)
+		duplicates := []string{}
+		for _, ext := range config.BlacklistExtensions {
+			cleanExt := strings.ToLower(strings.TrimSpace(ext))
+			if cleanExt == "" {
+				continue
+			}
+			if extMap[cleanExt] {
+				duplicates = append(duplicates, cleanExt)
+			}
+			extMap[cleanExt] = true
+		}
+		if len(duplicates) > 0 {
+			fmt.Printf("⚠ Warning: duplicate extensions in blacklist: %v\n", duplicates)
+			warningCount++
+		}
+	}
+
+	// Check for conflicts: extension in BOTH lists (NEW)
+	if len(config.WhitelistExtensions) > 0 && len(config.BlacklistExtensions) > 0 {
+		whiteMap := make(map[string]bool)
+		for _, ext := range config.WhitelistExtensions {
+			cleanExt := strings.ToLower(strings.TrimSpace(ext))
+			whiteMap[cleanExt] = true
+		}
+
+		conflicts := []string{}
+		for _, ext := range config.BlacklistExtensions {
+			cleanExt := strings.ToLower(strings.TrimSpace(ext))
+			if whiteMap[cleanExt] {
+				conflicts = append(conflicts, cleanExt)
+			}
+		}
+
+		if len(conflicts) > 0 {
+			fmt.Printf("⚠ Warning: extensions in BOTH whitelist and blacklist: %v\n", conflicts)
+			fmt.Println("  Note: Only the active mode's list will be used")
+			warningCount++
+		}
 	}
 
 	// Validate max_file_size format
@@ -118,28 +208,9 @@ func validateConfig(config *Config) error {
 		}
 	}
 
-	// Check for duplicate extensions
-	extMap := make(map[string]bool)
-	duplicateExts := []string{}
-	for _, ext := range config.Extensions {
-		cleanExt := strings.ToLower(strings.TrimSpace(ext))
-
-		// Check for empty extensions
-		if cleanExt == "" {
-			fmt.Println("⚠ Warning: found empty extension in config, ignoring")
-			warningCount++
-			continue
-		}
-
-		if extMap[cleanExt] {
-			duplicateExts = append(duplicateExts, cleanExt)
-		}
-		extMap[cleanExt] = true
-	}
-
-	if len(duplicateExts) > 0 {
-		fmt.Printf("⚠ Warning: duplicate extensions found: %v\n", duplicateExts)
-		fmt.Println("  Tip: Edit config.json to remove duplicates")
+	// Check if exclude_dirs list is empty (warning, not error)
+	if len(config.ExcludeDirs) == 0 {
+		fmt.Println("⚠ Warning: exclude_dirs is empty - will scan all directories")
 		warningCount++
 	}
 
@@ -148,14 +219,11 @@ func validateConfig(config *Config) error {
 	duplicateDirs := []string{}
 	for _, dir := range config.ExcludeDirs {
 		cleanDir := strings.TrimSpace(dir)
-
-		// Check for empty directories
 		if cleanDir == "" {
 			fmt.Println("⚠ Warning: found empty exclude_dir in config, ignoring")
 			warningCount++
 			continue
 		}
-
 		if dirMap[cleanDir] {
 			duplicateDirs = append(duplicateDirs, cleanDir)
 		}
@@ -165,21 +233,6 @@ func validateConfig(config *Config) error {
 	if len(duplicateDirs) > 0 {
 		fmt.Printf("⚠ Warning: duplicate exclude_dirs found: %v\n", duplicateDirs)
 		fmt.Println("  Tip: Edit config.json to remove duplicates")
-		warningCount++
-	}
-
-	// Check for suspicious file extensions (missing dot)
-	suspiciousExts := []string{}
-	for _, ext := range config.Extensions {
-		cleanExt := strings.TrimSpace(ext)
-		if cleanExt != "" && !strings.HasPrefix(cleanExt, ".") && len(cleanExt) > 1 {
-			suspiciousExts = append(suspiciousExts, cleanExt)
-		}
-	}
-
-	if len(suspiciousExts) > 0 && len(suspiciousExts) <= 5 {
-		fmt.Printf("⚠ Warning: extensions without dot found: %v\n", suspiciousExts)
-		fmt.Println("  Note: Dots will be added automatically")
 		warningCount++
 	}
 
@@ -324,6 +377,71 @@ func validateDirectory(dirPath string) error {
 	}
 
 	return nil
+}
+
+// ============================================================================
+// CHECK IF FILE SHOULD BE SCANNED
+// ============================================================================
+
+// shouldScanFile determines if a file should be scanned based on its extension
+// and the current scan mode (whitelist/blacklist)
+//
+// Parameters:
+//   - filePath: Full path to the file
+//   - mode: Scan mode ("whitelist" or "blacklist")
+//   - whitelist: List of extensions to scan (used in whitelist mode)
+//   - blacklist: List of extensions to skip (used in blacklist mode)
+//
+// Returns:
+//   - true if file should be scanned
+//   - false if file should be skipped
+func shouldScanFile(filePath string, mode string, whitelist []string, blacklist []string) bool {
+	// Get file extension (lowercase, with dot)
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	// If file has no extension, decide based on mode
+	if ext == "" {
+		// In whitelist mode: skip files without extensions
+		// In blacklist mode: scan files without extensions (they might be text files)
+		return mode == "blacklist"
+	}
+
+	// WHITELIST MODE: Only scan if extension is in whitelist
+	if mode == "whitelist" {
+		for _, allowedExt := range whitelist {
+			// Ensure extension has dot prefix for comparison
+			cleanExt := allowedExt
+			if !strings.HasPrefix(cleanExt, ".") {
+				cleanExt = "." + cleanExt
+			}
+			cleanExt = strings.ToLower(strings.TrimSpace(cleanExt))
+
+			if ext == cleanExt {
+				return true // Extension found in whitelist, scan it
+			}
+		}
+		return false // Not in whitelist, skip it
+	}
+
+	// BLACKLIST MODE: Scan everything EXCEPT blacklisted extensions
+	if mode == "blacklist" {
+		for _, blockedExt := range blacklist {
+			// Ensure extension has dot prefix for comparison
+			cleanExt := blockedExt
+			if !strings.HasPrefix(cleanExt, ".") {
+				cleanExt = "." + cleanExt
+			}
+			cleanExt = strings.ToLower(strings.TrimSpace(cleanExt))
+
+			if ext == cleanExt {
+				return false // Extension found in blacklist, skip it
+			}
+		}
+		return true // Not in blacklist, scan it
+	}
+
+	// Default: don't scan (shouldn't reach here if validation worked)
+	return false
 }
 
 // ============================================================================
@@ -1927,9 +2045,19 @@ func scanFileWithCount(filepath string) int {
 // ============================================================================
 
 // scanDirectoryWithOptionsConcurrent scans directory with goroutines
-func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, extensions []string, excludeDirs []string, maxFileSize int64, workers int) error {
+func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, scanMode string,
+	whitelistExts []string, blacklistExts []string, excludeDirs []string, maxFileSize int64, workers int) error {
+
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
+	fmt.Printf("Scan mode: %s\n", scanMode) // Show scan mode
 	fmt.Printf("Workers: %d (concurrent scanning enabled)\n", workers)
+
+	// Show which extensions are being used
+	if scanMode == "whitelist" {
+		fmt.Printf("Whitelist: %d extensions (scanning only these)\n", len(whitelistExts))
+	} else {
+		fmt.Printf("Blacklist: %d extensions (scanning everything except these)\n", len(blacklistExts))
+	}
 
 	// Show max file size setting
 	if maxFileSize > 0 {
@@ -1940,8 +2068,14 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 
 	fmt.Println(strings.Repeat("=", 60))
 
-	// Initialize report
-	initReport(dirPath, extensions)
+	// Initialize report with appropriate extension list
+	var reportExtensions []string
+	if scanMode == "whitelist" {
+		reportExtensions = whitelistExts
+	} else {
+		reportExtensions = []string{"all except blacklist"}
+	}
+	initReport(dirPath, reportExtensions)
 
 	startTime := time.Now()
 
@@ -1950,6 +2084,7 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 	totalFiles := 0
 	scannedFiles := 0
 	skippedFiles := 0
+	skippedByExtension := 0 //Track files skipped by extension
 	foundCards := 0
 
 	// Collect files to scan
@@ -1972,11 +2107,10 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 		totalFiles++
 		mu.Unlock()
 
-		// Skip large files BEFORE adding to scan list
+		// Skip large files BEFORE checking extension
 		if maxFileSize > 0 && info.Size() > maxFileSize {
 			mu.Lock()
 			skippedFiles++
-			// Debug logging for skipped files (show first 5)
 			if skippedFiles <= 5 {
 				fmt.Printf("⊘ Skipping (too large): %s (%s)\n",
 					filepath.Base(path),
@@ -1986,13 +2120,13 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 			return nil
 		}
 
-		// Check extension
-		ext := strings.ToLower(filepath.Ext(path))
-		for _, allowedExt := range extensions {
-			if ext == allowedExt {
-				filesToScan = append(filesToScan, path)
-				break
-			}
+		// NEW: Use shouldScanFile() function to check extension
+		if shouldScanFile(path, scanMode, whitelistExts, blacklistExts) {
+			filesToScan = append(filesToScan, path)
+		} else {
+			mu.Lock()
+			skippedByExtension++
+			mu.Unlock()
 		}
 
 		return nil
@@ -2002,13 +2136,22 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 		return fmt.Errorf("directory walk failed: %w", err)
 	}
 
-	// Show skipped file summary
+	// Show skip summaries
 	if skippedFiles > 5 {
 		fmt.Printf("⊘ ... and %d more files skipped (too large)\n", skippedFiles-5)
 	}
 
+	// NEW: Show extension-based skip summary
+	if skippedByExtension > 0 {
+		if scanMode == "whitelist" {
+			fmt.Printf("⊘ Skipped %d files (not in whitelist)\n", skippedByExtension)
+		} else {
+			fmt.Printf("⊘ Skipped %d files (in blacklist)\n", skippedByExtension)
+		}
+	}
+
 	// Create channels for work distribution
-	filesChan := make(chan string, workers*2) // Buffered channel
+	filesChan := make(chan string, workers*2)
 
 	// WaitGroup to wait for all workers
 	var wg sync.WaitGroup
@@ -2019,18 +2162,15 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 		go func(workerID int) {
 			defer wg.Done()
 
-			// Each worker processes files from the channel
 			for filePath := range filesChan {
 				cardsFound := scanFileWithCount(filePath)
 
-				// Update shared counters safely
 				mu.Lock()
 				scannedFiles++
 				if cardsFound > 0 {
 					foundCards += cardsFound
 					fmt.Printf("✓ Found %d cards in: %s\n", cardsFound, filepath.Base(filePath))
 				}
-				// Show progress
 				fmt.Printf("\r[Scanned: %d/%d | Cards: %d]", scannedFiles, len(filesToScan), foundCards)
 				mu.Unlock()
 			}
@@ -2041,7 +2181,7 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 	for _, file := range filesToScan {
 		filesChan <- file
 	}
-	close(filesChan) // Close channel when done sending
+	close(filesChan)
 
 	// Wait for all workers to finish
 	wg.Wait()
@@ -2062,6 +2202,9 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 	fmt.Printf("  Scanned: %d\n", scannedFiles)
 	if skippedFiles > 0 {
 		fmt.Printf("  Skipped (size): %d\n", skippedFiles)
+	}
+	if skippedByExtension > 0 {
+		fmt.Printf("  Skipped (extension): %d\n", skippedByExtension)
 	}
 	fmt.Printf("  Cards found: %d\n", foundCards)
 
@@ -2084,9 +2227,19 @@ func scanDirectoryWithOptionsConcurrent(dirPath string, outputFile string, exten
 }
 
 // scanDirectoryWithOptions scans a directory (single-threaded)
-func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []string, excludeDirs []string, maxFileSize int64) error {
+func scanDirectoryWithOptions(dirPath string, outputFile string, scanMode string,
+	whitelistExts []string, blacklistExts []string, excludeDirs []string, maxFileSize int64) error {
+
 	fmt.Printf("\nScanning directory: %s\n", dirPath)
+	fmt.Printf("Scan mode: %s\n", scanMode) // Show scan mode
 	fmt.Printf("Workers: 1 (single-threaded mode)\n")
+
+	// Show which extensions are being used
+	if scanMode == "whitelist" {
+		fmt.Printf("Whitelist: %d extensions (scanning only these)\n", len(whitelistExts))
+	} else {
+		fmt.Printf("Blacklist: %d extensions (scanning everything except these)\n", len(blacklistExts))
+	}
 
 	// Show max file size
 	if maxFileSize > 0 {
@@ -2097,13 +2250,20 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 
 	fmt.Println(strings.Repeat("=", 60))
 
-	// Initialize report
-	initReport(dirPath, extensions)
+	// Initialize report with appropriate extension list
+	var reportExtensions []string
+	if scanMode == "whitelist" {
+		reportExtensions = whitelistExts
+	} else {
+		reportExtensions = []string{"all except blacklist"}
+	}
+	initReport(dirPath, reportExtensions)
 
 	startTime := time.Now()
 	totalFiles := 0
 	scannedFiles := 0
 	skippedFiles := 0
+	skippedByExtension := 0
 	foundCards := 0
 
 	// Progress indicator timing
@@ -2129,7 +2289,6 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 		// Skip if file is too big
 		if maxFileSize > 0 && info.Size() > maxFileSize {
 			skippedFiles++
-			// Debug logging
 			if skippedFiles <= 5 {
 				fmt.Printf("⊘ Skipping (too large): %s (%s)\n",
 					filepath.Base(path),
@@ -2138,15 +2297,8 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 			return nil
 		}
 
-		// Check if extension matches
-		ext := strings.ToLower(filepath.Ext(path))
-		shouldScan := false
-		for _, allowedExt := range extensions {
-			if ext == allowedExt {
-				shouldScan = true
-				break
-			}
-		}
+		// NEW: Use shouldScanFile() function instead of simple extension matching
+		shouldScan := shouldScanFile(path, scanMode, whitelistExts, blacklistExts)
 
 		if shouldScan {
 			scannedFiles++
@@ -2163,14 +2315,25 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 				fmt.Printf("\r[Scanned: %d/%d | Cards: %d]", scannedFiles, totalFiles, foundCards)
 				lastUpdate = time.Now()
 			}
+		} else {
+			skippedByExtension++ // NEW
 		}
 
 		return nil
 	})
 
-	// Show skipped summary
+	// Show skip summaries
 	if skippedFiles > 5 {
 		fmt.Printf("\n⊘ ... and %d more files skipped (too large)\n", skippedFiles-5)
+	}
+
+	// NEW: Show extension-based skip summary
+	if skippedByExtension > 0 {
+		if scanMode == "whitelist" {
+			fmt.Printf("⊘ Skipped %d files (not in whitelist)\n", skippedByExtension)
+		} else {
+			fmt.Printf("⊘ Skipped %d files (in blacklist)\n", skippedByExtension)
+		}
 	}
 
 	// Clear progress line
@@ -2193,6 +2356,9 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 	fmt.Printf("  Scanned: %d\n", scannedFiles)
 	if skippedFiles > 0 {
 		fmt.Printf("  Skipped (size): %d\n", skippedFiles)
+	}
+	if skippedByExtension > 0 {
+		fmt.Printf("  Skipped (extension): %d\n", skippedByExtension) // NEW
 	}
 	fmt.Printf("  Cards found: %d\n", foundCards)
 
@@ -2221,6 +2387,7 @@ func scanDirectoryWithOptions(dirPath string, outputFile string, extensions []st
 func showHelp() {
 	fmt.Println(`
 BasicPanScanner v2.0.0 - PCI Compliance Scanner
+
 Usage: ./scanner -path <directory> [options]
 
 Required:
@@ -2228,46 +2395,39 @@ Required:
 
 Options:
     -output <file>         Save results (.json, .csv, .html, .txt, .xml)
-    -ext <list>           Extensions to scan (default: from config)
+    -mode <mode>          Scan mode: 'whitelist' or 'blacklist' (overrides config)
+    -ext <list>           Extensions (applies to active mode)
     -exclude <list>       Directories to skip (default: from config)
-    -workers <n>          Number of concurrent workers (default: CPU/2, max: CPU cores)
-    -help                 Show this help
+    -workers <n>          Number of concurrent workers (default: CPU/2)
+    -help                 Show help
+
+Scan Modes:
+    whitelist             Scan ONLY specified extensions
+    blacklist             Scan everything EXCEPT specified extensions (default)
 
 Examples:
-    # Basic scan (uses default workers)
+    # Use config.json settings (blacklist mode by default)
     ./scanner -path /var/log
 
-    # Fast scan with more workers
-    ./scanner -path /var/log -workers 4
+    # Force whitelist mode (scan only .txt and .log)
+    ./scanner -path /var/log -mode whitelist -ext txt,log
 
-    # Single-threaded scan
-    ./scanner -path /var/log -workers 1
+    # Force blacklist mode (scan everything except .jpg and .png)
+    ./scanner -path /data -mode blacklist -ext jpg,png
 
-    # Full scan with XML output
-    ./scanner -path /data -workers 4 -output report.xml
+    # Use config whitelist but override extensions
+    ./scanner -path /data -mode whitelist -ext csv,sql,json
 
-    # Full scan with JSON output
-    ./scanner -path /data -workers 4 -output report.json
+    # Fast scan with custom mode
+    ./scanner -path /var/log -mode blacklist -workers 4 -output report.html
+
+Configuration:
+    Edit config.json to set default mode and extension lists.
+    CLI flags always override config values.
 
 Performance:
     Default workers: CPU cores / 2 (safe for production)
-    Max workers: CPU cores (automatically limited)
     More workers = faster scanning (2-4x speed improvement)
-
-Supported Card Issuers (11):
-    Visa, Mastercard, Amex, Discover, Diners Club, JCB,
-    UnionPay, Maestro, RuPay, Troy, Mir
-
-Configuration:
-    Edit config.json to change default settings.
-    CLI flags always override config values.
-
-Export Formats:
-    .json  - JSON format (machine-readable)
-    .csv   - CSV format (spreadsheet import)
-    .txt   - Plain text format (human-readable)
-    .html  - HTML format (browser viewing)
-    .xml   - XML format (enterprise systems)
 `)
 }
 
@@ -2295,6 +2455,7 @@ func main() {
 	// Define command line flags
 	pathFlag := flag.String("path", "", "Directory to scan")
 	outputFlag := flag.String("output", "", "Output file")
+	modeFlag := flag.String("mode", "", "Scan mode: 'whitelist' or 'blacklist' (overrides config)")
 	extensionsFlag := flag.String("ext", "", "Extensions (e.g., txt,log,csv)")
 	excludeFlag := flag.String("exclude", "", "Exclude dirs (e.g., .git,vendor)")
 	workersFlag := flag.Int("workers", 0, "Number of concurrent workers (default: CPU/2)")
@@ -2319,38 +2480,75 @@ func main() {
 	// Display banner
 	displayBanner()
 
-	// Initialize card detection patterns (MUST be called before scanning)
+	// Initialize card detection patterns
 	initCardPatterns()
 
-	// Load config file (use defaults if it fails)
+	// Load config file
 	config, err := loadConfig("config.json")
 	if err != nil {
 		fmt.Printf("Warning: Could not load config.json: %v\n", err)
 		fmt.Println("Using default settings\n")
 		config = &Config{
-			Extensions:  []string{".txt", ".log", ".csv"},
-			ExcludeDirs: []string{".git", "node_modules"},
-			MaxFileSize: "50MB",
+			ScanMode:            "blacklist",
+			WhitelistExtensions: []string{},
+			BlacklistExtensions: []string{".exe", ".dll", ".so", ".jpg", ".png", ".mp4"},
+			ExcludeDirs:         []string{".git", "node_modules"},
+			MaxFileSize:         "50MB",
 		}
 	}
 
 	// Start with config values
-	extensions := config.Extensions
+	scanMode := config.ScanMode
+	whitelistExts := config.WhitelistExtensions
+	blacklistExts := config.BlacklistExtensions
 	excludeDirs := config.ExcludeDirs
 	maxFileSize, _ := parseFileSize(config.MaxFileSize)
 
-	// CLI flags override config
+	// NEW: CLI flag overrides for mode
+	if *modeFlag != "" {
+		validModes := map[string]bool{"whitelist": true, "blacklist": true}
+		if !validModes[*modeFlag] {
+			fmt.Printf("Error: invalid mode '%s', must be 'whitelist' or 'blacklist'\n", *modeFlag)
+			os.Exit(1)
+		}
+		scanMode = *modeFlag
+		fmt.Printf("✓ Mode override from CLI: %s\n", scanMode)
+	}
+
+	// CLI flag overrides for extensions (applies to active mode)
 	if *extensionsFlag != "" {
-		extensions = strings.Split(*extensionsFlag, ",")
+		extensions := strings.Split(*extensionsFlag, ",")
 		for i := range extensions {
 			extensions[i] = strings.TrimSpace(extensions[i])
 		}
+
+		// Apply to the active mode
+		if scanMode == "whitelist" {
+			whitelistExts = extensions
+			fmt.Printf("✓ Whitelist override from CLI: %d extensions\n", len(extensions))
+		} else {
+			blacklistExts = extensions
+			fmt.Printf("✓ Blacklist override from CLI: %d extensions\n", len(extensions))
+		}
 	}
 
+	// CLI flag overrides for exclude dirs
 	if *excludeFlag != "" {
 		excludeDirs = strings.Split(*excludeFlag, ",")
 		for i := range excludeDirs {
 			excludeDirs[i] = strings.TrimSpace(excludeDirs[i])
+		}
+	}
+
+	// Add dots to extensions if needed
+	for i := range whitelistExts {
+		if !strings.HasPrefix(whitelistExts[i], ".") {
+			whitelistExts[i] = "." + whitelistExts[i]
+		}
+	}
+	for i := range blacklistExts {
+		if !strings.HasPrefix(blacklistExts[i], ".") {
+			blacklistExts[i] = "." + blacklistExts[i]
 		}
 	}
 
@@ -2359,14 +2557,12 @@ func main() {
 	workers := *workersFlag
 
 	if workers == 0 {
-		// Default: Half of CPU cores (minimum 1)
 		workers = numCPU / 2
 		if workers < 1 {
 			workers = 1
 		}
 	}
 
-	// Validate worker count
 	if workers < 1 {
 		fmt.Println("Error: workers must be at least 1")
 		os.Exit(1)
@@ -2384,18 +2580,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Add dots to extensions if needed
-	for i := range extensions {
-		if !strings.HasPrefix(extensions[i], ".") {
-			extensions[i] = "." + extensions[i]
-		}
-	}
-
-	// Run the scan (concurrent if workers > 1)
+	// Run the scan with new parameters
 	if workers > 1 {
-		err = scanDirectoryWithOptionsConcurrent(*pathFlag, *outputFlag, extensions, excludeDirs, maxFileSize, workers)
+		err = scanDirectoryWithOptionsConcurrent(*pathFlag, *outputFlag, scanMode,
+			whitelistExts, blacklistExts, excludeDirs, maxFileSize, workers)
 	} else {
-		err = scanDirectoryWithOptions(*pathFlag, *outputFlag, extensions, excludeDirs, maxFileSize)
+		// Single-threaded version also needs updating
+		err = scanDirectoryWithOptions(*pathFlag, *outputFlag, scanMode,
+			whitelistExts, blacklistExts, excludeDirs, maxFileSize)
 	}
 
 	if err != nil {

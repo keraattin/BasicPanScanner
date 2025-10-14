@@ -1,5 +1,16 @@
 {
-  "extensions": [
+  "_comment": "BasicPanScanner Configuration v2.1.0",
+  "_info": {
+    "scan_mode": "Controls which files to scan based on extensions",
+    "modes": {
+      "blacklist": "Scan ALL files EXCEPT those in blacklist_extensions",
+      "whitelist": "Scan ONLY files in whitelist_extensions"
+    }
+  },
+  
+  "scan_mode": "blacklist",
+  
+  "whitelist_extensions": [
     "txt",
     "log",
     "csv",
@@ -111,6 +122,87 @@
     "frm",
     "ctl"
   ],
+  
+  "blacklist_extensions": [
+    "exe",
+    "dll",
+    "so",
+    "dylib",
+    "bin",
+    "o",
+    "obj",
+    "class",
+    "pyc",
+    "pyo",
+    "elc",
+    "zip",
+    "tar",
+    "gz",
+    "bz2",
+    "7z",
+    "rar",
+    "iso",
+    "dmg",
+    "pkg",
+    "deb",
+    "rpm",
+    "apk",
+    "jar",
+    "war",
+    "ear",
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+    "bmp",
+    "tiff",
+    "tif",
+    "svg",
+    "ico",
+    "webp",
+    "heic",
+    "raw",
+    "cr2",
+    "nef",
+    "mp4",
+    "avi",
+    "mkv",
+    "mov",
+    "wmv",
+    "flv",
+    "webm",
+    "m4v",
+    "mpg",
+    "mpeg",
+    "mp3",
+    "wav",
+    "flac",
+    "aac",
+    "ogg",
+    "wma",
+    "m4a",
+    "opus",
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "eot",
+    "psd",
+    "ai",
+    "sketch",
+    "fig",
+    "xd",
+    "indd",
+    "blend",
+    "3ds",
+    "max",
+    "fbx",
+    "stl",
+    "lock",
+    "sum",
+    "cache"
+  ],
+  
   "exclude_dirs": [
     ".git",
     ".svn",
@@ -216,5 +308,6 @@
     "boot",
     "lost+found"
   ],
+  
   "max_file_size": "50MB"
 }
