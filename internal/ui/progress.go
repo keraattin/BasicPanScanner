@@ -159,7 +159,7 @@ func ShowSummary(duration time.Duration, totalFiles, scannedFiles, skippedBySize
 // Example:
 //
 //	ui.ShowFileFound("app.log", 3)
-//	// Output: ✓ Found 3 cards in: app.log
+//	Output: ✓ Found 3 cards in: app.log
 func ShowFileFound(filename string, count int) {
 	fmt.Printf("✓ Found %d cards in: %s\n", count, filename)
 }
@@ -172,8 +172,8 @@ func ShowFileFound(filename string, count int) {
 // Example:
 //
 //	ui.ShowExportSuccess("report.html")
-//	// Output:
-//	//   ✓ Saved: report.html
+//	 Output:
+//	   ✓ Saved: report.html
 func ShowExportSuccess(filename string) {
 	fmt.Printf("\n  ✓ Saved: %s\n", filename)
 }

@@ -92,7 +92,7 @@ func Load(filename string) (*Config, error) {
 // Example:
 //
 //	bytes, err := cfg.GetMaxFileSizeBytes()
-//	// "50MB" returns 52428800
+//	"50MB" returns 52428800
 func (c *Config) GetMaxFileSizeBytes() (int64, error) {
 	return ParseFileSize(c.MaxFileSize)
 }
