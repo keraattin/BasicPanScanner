@@ -45,7 +45,7 @@ func (e *TXTExporter) Export(report *Report, filename string) error {
 	content.WriteString(strings.Repeat("─", 60) + "\n")
 	content.WriteString(fmt.Sprintf("Date:           %s\n", report.ScanDate.Format("2006-01-02 15:04:05")))
 	content.WriteString(fmt.Sprintf("Directory:      %s\n", report.Directory))
-	content.WriteString(fmt.Sprintf("Duration:       %s\n", report.Duration.Round(1)))
+	content.WriteString(fmt.Sprintf("Duration:       %s\n", report.GetFormattedDuration())) // Use formatted duration
 	content.WriteString(fmt.Sprintf("Files Scanned:  %d / %d (%.1f%%)\n",
 		report.ScannedFiles,
 		report.TotalFiles,

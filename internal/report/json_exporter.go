@@ -78,7 +78,7 @@ func (e *JSONExporter) Export(report *Report, filename string) error {
 	jr.Version = report.Version
 	jr.ScanInfo.ScanDate = report.ScanDate.Format("2006-01-02T15:04:05Z07:00")
 	jr.ScanInfo.Directory = report.Directory
-	jr.ScanInfo.Duration = report.Duration.String()
+	jr.ScanInfo.Duration = report.GetFormattedDuration() // Use formatted duration
 	jr.ScanInfo.TotalFiles = report.TotalFiles
 	jr.ScanInfo.ScannedFiles = report.ScannedFiles
 

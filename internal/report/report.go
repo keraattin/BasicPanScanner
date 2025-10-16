@@ -259,3 +259,100 @@ func (r *Report) GetRiskLevel() (level string, color string) {
 	}
 	return "Low", "#27ae60" // Green
 }
+
+// GetFormattedDuration returns a human-readable duration string
+// This converts Go's verbose duration format to something cleaner
+//
+// Returns:
+//   - string: Formatted duration (e.g., "1h 23m 45s", "2m 15s", "3.5s", "250ms")
+//
+// Examples:
+//
+//	1h23m45.123456789s -> "1h 23m 45s"
+//	2m15.5s            -> "2m 16s"
+//	3.567s             -> "3.6s"
+//	123.456ms          -> "123ms"
+//	1.234ms            -> "1.2ms"
+func (r *Report) GetFormattedDuration() string {
+	return FormatDuration(r.Duration)
+}
+
+// FormatDuration formats a duration in a human-readable way
+// This helper function can be used throughout the application
+//
+// Parameters:
+//   - d: Duration to format
+//
+// Returns:
+//   - string: Formatted duration
+//
+// Formatting rules:
+//   - Hours + minutes + seconds: "1h 23m 45s"
+//   - Minutes + seconds: "2m 15s"
+//   - Seconds only (>= 10s): "45s"
+//   - Seconds with decimal (1-10s): "3.5s"
+//   - Milliseconds (>= 10ms): "123ms"
+//   - Milliseconds with decimal (< 10ms): "1.2ms"
+//   - Microseconds: "500µs"
+//
+// Examples:
+//
+//	5000000000000 ns (1h23m20s) -> "1h 23m 20s"
+//	125000000000 ns (2m5s)      -> "2m 5s"
+//	45000000000 ns (45s)        -> "45s"
+//	3567000000 ns (3.567s)      -> "3.6s"
+//	123456000 ns (123.456ms)    -> "123ms"
+//	1234000 ns (1.234ms)        -> "1.2ms"
+//	567000 ns (567µs)           -> "567µs"
+func FormatDuration(d time.Duration) string {
+	// Handle very short durations
+	if d < time.Millisecond {
+		// Less than 1ms, show microseconds
+		us := float64(d.Microseconds())
+		if us < 10 {
+			return fmt.Sprintf("%.1fµs", us)
+		}
+		return fmt.Sprintf("%dµs", d.Microseconds())
+	}
+
+	if d < time.Second {
+		// Less than 1 second, show milliseconds
+		ms := float64(d.Milliseconds())
+		if ms < 10 {
+			return fmt.Sprintf("%.1fms", d.Seconds()*1000)
+		}
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+
+	if d < time.Minute {
+		// Less than 1 minute, show seconds
+		s := d.Seconds()
+		if s < 10 {
+			return fmt.Sprintf("%.1fs", s)
+		}
+		return fmt.Sprintf("%ds", int(s))
+	}
+
+	if d < time.Hour {
+		// Less than 1 hour, show minutes and seconds
+		minutes := int(d.Minutes())
+		seconds := int(d.Seconds()) % 60
+		if seconds == 0 {
+			return fmt.Sprintf("%dm", minutes)
+		}
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	}
+
+	// 1 hour or more, show hours, minutes, and seconds
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+
+	if minutes == 0 && seconds == 0 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	if seconds == 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+}

@@ -18,7 +18,7 @@ func ShowBanner(version string) {
     ║                                                          ║
     ║     BasicPanScanner - PCI Compliance Tool                ║
     ║     ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                  ║
-    ║     Version: ` + version + `                             ║
+    ║     Version: ` + version + `                                       ║
     ║     Author:  @keraattin                                  ║
     ║     Purpose: Detect credit card data in files            ║
     ║                                                          ║

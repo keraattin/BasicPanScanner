@@ -54,7 +54,7 @@ func (e *CSVExporter) Export(report *Report, filename string) error {
 	writer.Write([]string{"SCAN INFORMATION"})
 	writer.Write([]string{"Scan Date", report.ScanDate.Format("2006-01-02 15:04:05")})
 	writer.Write([]string{"Directory", report.Directory})
-	writer.Write([]string{"Duration", report.Duration.String()})
+	writer.Write([]string{"Duration", report.GetFormattedDuration()}) // Use formatted duration
 	writer.Write([]string{"Total Files", fmt.Sprintf("%d", report.TotalFiles)})
 	writer.Write([]string{"Scanned Files", fmt.Sprintf("%d", report.ScannedFiles)})
 	writer.Write([]string{""})

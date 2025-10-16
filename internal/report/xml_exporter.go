@@ -172,7 +172,7 @@ func (e *XMLExporter) Export(report *Report, filename string) error {
 		Version:      report.Version,
 		ScanDate:     report.ScanDate.Format("2006-01-02T15:04:05Z07:00"),
 		Directory:    report.Directory,
-		Duration:     report.Duration.String(),
+		Duration:     report.GetFormattedDuration(), // Use formatted duration
 		TotalFiles:   report.TotalFiles,
 		ScannedFiles: report.ScannedFiles,
 		TotalCards:   report.CardsFound,

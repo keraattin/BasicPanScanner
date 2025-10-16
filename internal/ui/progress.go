@@ -130,7 +130,7 @@ func ShowScanInfo(directory, mode string, extensions, workers int, maxSize strin
 func ShowSummary(duration time.Duration, totalFiles, scannedFiles, skippedBySize, skippedByExt, cardsFound int, scanRate float64) {
 	fmt.Println("\n" + strings.Repeat("=", 60))
 	fmt.Printf("✓ Scan complete!\n")
-	fmt.Printf("  Time: %s\n", duration.Round(time.Second))
+	fmt.Printf("  Time: %s\n", formatDuration(duration)) // Use formatted duration
 	fmt.Printf("  Total files: %d\n", totalFiles)
 	fmt.Printf("  Scanned: %d\n", scannedFiles)
 
@@ -149,6 +149,67 @@ func ShowSummary(duration time.Duration, totalFiles, scannedFiles, skippedBySize
 	}
 }
 
+// formatDuration formats a duration in a human-readable way
+// This is a local helper function for UI display
+//
+// Parameters:
+//   - d: Duration to format
+//
+// Returns:
+//   - string: Formatted duration (e.g., "1h 23m", "2m 15s", "3.5s", "250ms")
+func formatDuration(d time.Duration) string {
+	// Handle very short durations
+	if d < time.Millisecond {
+		// Less than 1ms, show microseconds
+		us := float64(d.Microseconds())
+		if us < 10 {
+			return fmt.Sprintf("%.1fµs", us)
+		}
+		return fmt.Sprintf("%dµs", d.Microseconds())
+	}
+
+	if d < time.Second {
+		// Less than 1 second, show milliseconds
+		ms := float64(d.Milliseconds())
+		if ms < 10 {
+			return fmt.Sprintf("%.1fms", d.Seconds()*1000)
+		}
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+
+	if d < time.Minute {
+		// Less than 1 minute, show seconds
+		s := d.Seconds()
+		if s < 10 {
+			return fmt.Sprintf("%.1fs", s)
+		}
+		return fmt.Sprintf("%ds", int(s))
+	}
+
+	if d < time.Hour {
+		// Less than 1 hour, show minutes and seconds
+		minutes := int(d.Minutes())
+		seconds := int(d.Seconds()) % 60
+		if seconds == 0 {
+			return fmt.Sprintf("%dm", minutes)
+		}
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	}
+
+	// 1 hour or more, show hours, minutes, and seconds
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+
+	if minutes == 0 && seconds == 0 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	if seconds == 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+}
+
 // ShowFileFound displays a message when cards are found in a file
 // This provides immediate feedback during scanning
 //
@@ -159,7 +220,7 @@ func ShowSummary(duration time.Duration, totalFiles, scannedFiles, skippedBySize
 // Example:
 //
 //	ui.ShowFileFound("app.log", 3)
-//	Output: ✓ Found 3 cards in: app.log
+//	 Output: ✓ Found 3 cards in: app.log
 func ShowFileFound(filename string, count int) {
 	fmt.Printf("✓ Found %d cards in: %s\n", count, filename)
 }

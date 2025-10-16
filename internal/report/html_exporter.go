@@ -198,7 +198,7 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
             <div class="summary-grid">
                 <div class="summary-card">
                     <div class="summary-label">Scan Duration</div>
-                    <div class="summary-value">` + report.Duration.Round(1).String() + `</div>
+                    <div class="summary-value">` + report.GetFormattedDuration() + `</div>
                 </div>
                 <div class="summary-card">
                     <div class="summary-label">Files Scanned</div>
