@@ -1,5 +1,5 @@
 // Package report - HTML exporter
-// Exports reports in interactive HTML format
+// Exports reports in interactive HTML format with professional styling
 package report
 
 import (
@@ -19,7 +19,7 @@ import (
 type HTMLExporter struct{}
 
 // Export implements the Exporter interface for HTML format
-// Creates an interactive HTML report with accordion UI and statistics
+// Creates an interactive HTML report with professional styling and real card icons
 //
 // Parameters:
 //   - report: The report to export
@@ -30,253 +30,334 @@ type HTMLExporter struct{}
 func (e *HTMLExporter) Export(report *Report, filename string) error {
 	var html strings.Builder
 
-	// Helper function to get card brand icon (using Unicode/CSS)
+	// ============================================================
+	// HELPER FUNCTIONS
+	// ============================================================
+
+	// getCardIcon returns the image URL for each card brand
+	// Using placeholder URLs - replace with actual icon URLs or local files
 	getCardIcon := func(cardType string) string {
+		// Map card types to their icon URLs
+		// You can replace these URLs with:
+		// 1. Local file paths (e.g., "./icons/visa.png")
+		// 2. Your own hosted icons
+		// 3. CDN URLs from icon libraries
 		icons := map[string]string{
-			"Visa":       "💳", // We'll style these with CSS
-			"MasterCard": "💳",
-			"Amex":       "💳",
-			"Discover":   "💳",
-			"Diners":     "💳",
-			"JCB":        "💳",
-			"UnionPay":   "💳",
-			"Maestro":    "💳",
-			"RuPay":      "💳",
-			"Troy":       "💳",
-			"Mir":        "💳",
+			"Visa":       "https://img.icons8.com/color/48/visa.png",
+			"MasterCard": "https://img.icons8.com/color/48/mastercard.png",
+			"Amex":       "https://img.icons8.com/color/48/amex.png",
+			"Discover":   "https://img.icons8.com/color/48/discover.png",
+			"Diners":     "https://img.icons8.com/color/48/diners-club.png",
+			"JCB":        "https://img.icons8.com/color/48/jcb.png",
+			"UnionPay":   "https://img.icons8.com/color/48/unionpay.png",
+			"Maestro":    "https://img.icons8.com/color/48/maestro.png",
+			"RuPay":      "https://img.icons8.com/color/48/rupay.png",
+			"Troy":       "https://www.freelogovectors.net/wp-content/uploads/2024/01/troy-odeme-logo-freelogovectors.net_.png",
+			"Mir":        "https://upload.wikimedia.org/wikipedia/commons/b/b9/Mir-logo.SVG.svg",
 		}
-		if icon, ok := icons[cardType]; ok {
-			return icon
+
+		if iconURL, ok := icons[cardType]; ok {
+			return fmt.Sprintf(`<img src="%s" alt="%s" style="width: 32px; height: 20px; object-fit: contain;">`, iconURL, cardType)
 		}
-		return "💳"
+
+		// Default generic card icon
+		return `<img src="https://img.icons8.com/color/48/bank-cards.png" alt="Card" style="width: 32px; height: 20px; object-fit: contain;">`
 	}
 
-	// Helper function to get card brand color
+	// getCardColor returns professional colors for each card brand
 	getCardColor := func(cardType string) string {
 		colors := map[string]string{
-			"Visa":       "#1A1F71", // Visa blue
-			"MasterCard": "#EB001B", // Mastercard red
-			"Amex":       "#006FCF", // Amex blue
-			"Discover":   "#FF6000", // Discover orange
-			"Diners":     "#0079BE", // Diners blue
-			"JCB":        "#0E4C96", // JCB blue
-			"UnionPay":   "#E21836", // UnionPay red
-			"Maestro":    "#0099DF", // Maestro blue
-			"RuPay":      "#097CBE", // RuPay blue
-			"Troy":       "#00ADEF", // Troy blue
-			"Mir":        "#4DB45E", // Mir green
+			"Visa":       "#1A1F71",
+			"MasterCard": "#EB001B",
+			"Amex":       "#006FCF",
+			"Discover":   "#FF6000",
+			"Diners":     "#0079BE",
+			"JCB":        "#0E4C96",
+			"UnionPay":   "#E21836",
+			"Maestro":    "#0099DF",
+			"RuPay":      "#097CBE",
+			"Troy":       "#00ADEF",
+			"Mir":        "#4DB45E",
 		}
 		if color, ok := colors[cardType]; ok {
 			return color
 		}
-		return "#667eea" // Default purple
+		return "#6C757D" // Bootstrap gray
 	}
 
 	// ============================================================
-	// HTML HEAD AND STYLES
+	// HTML HEAD AND PROFESSIONAL STYLES
 	// ============================================================
 
 	html.WriteString(`<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PAN Scanner Report - BasicPanScanner v` + report.Version + `</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* ============================================================
+           GLOBAL STYLES
+           ============================================================ */
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+            line-height: 1.6;
             padding: 20px;
         }
+        
         .container {
             max-width: 1400px;
             margin: 0 auto;
             background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border-radius: 12px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
             overflow: hidden;
         }
+
+        /* ============================================================
+           HEADER SECTION
+           ============================================================ */
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 50px 40px;
+            text-align: center;
+            border-bottom: 4px solid #3498db;
+        }
+        
+        .header h1 { 
+            font-size: 32px; 
+            margin-bottom: 8px; 
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        
+        .header .subtitle { 
+            font-size: 16px; 
+            opacity: 0.9;
+            font-weight: 400;
+        }
+        
+        .header .version { 
+            font-size: 13px; 
+            opacity: 0.75;
+            margin-top: 10px;
+            font-weight: 300;
+        }
+
+        /* ============================================================
+           CONTENT AREA
+           ============================================================ */
+        .content { 
+            padding: 40px; 
+        }
+
+        /* ============================================================
+           EXECUTIVE SUMMARY - Professional Design
+           ============================================================ */
+        .executive-summary {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
             color: white;
             padding: 40px;
-            text-align: center;
+            border-radius: 10px;
+            margin-bottom: 35px;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.2);
         }
-        .header h1 { font-size: 36px; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
-        .header .version { font-size: 14px; opacity: 0.9; }
-        .content { padding: 40px; }
         
-        /* Executive Summary */
-        .executive-summary {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            padding: 35px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-        }
         .executive-summary h2 {
-            font-size: 28px;
-            margin-bottom: 20px;
+            font-size: 24px;
+            margin-bottom: 25px;
+            font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 10px;
-        }
-        .executive-summary .summary-text {
-            font-size: 16px;
-            line-height: 1.8;
-            margin-bottom: 15px;
-        }
-        .executive-summary .highlight {
-            font-weight: bold;
-            font-size: 20px;
-            background: rgba(255,255,255,0.2);
-            padding: 2px 8px;
-            border-radius: 4px;
-        }
-        .executive-summary .recommendation {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 2px solid rgba(255,255,255,0.3);
-            font-size: 15px;
-        }
-        .executive-summary .recommendation strong {
-            display: block;
-            margin-bottom: 10px;
-            font-size: 18px;
+            gap: 12px;
+            border-bottom: 2px solid rgba(255,255,255,0.3);
+            padding-bottom: 15px;
         }
         
-        /* Summary Cards */
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
-            margin-bottom: 30px;
-        }
-        .summary-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        .summary-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
-        }
-        .summary-label {
-            font-size: 13px;
-            opacity: 0.9;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-        }
-        .summary-value {
-            font-size: 36px;
-            font-weight: bold;
+            margin-top: 25px;
         }
         
-        /* Statistics Section */
+        .summary-item {
+            background: rgba(255,255,255,0.15);
+            padding: 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .summary-item .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .summary-item .value {
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        
+        .summary-item .subtext {
+            font-size: 13px;
+            opacity: 0.85;
+            margin-top: 5px;
+        }
+
+        /* ============================================================
+           STATISTICS CARDS - Professional Layout
+           ============================================================ */
         .stats-section {
             margin: 40px 0;
         }
+        
         .stats-section h2 {
             color: #2c3e50;
             margin-bottom: 25px;
             padding-bottom: 12px;
-            border-bottom: 3px solid #667eea;
-            font-size: 26px;
+            border-bottom: 2px solid #e8eaf0;
+            font-size: 22px;
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 10px;
         }
+        
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 25px;
             margin-bottom: 30px;
         }
+        
         .stats-card {
-            background: #f8f9fa;
+            background: #ffffff;
             padding: 30px;
-            border-radius: 12px;
-            border-left: 4px solid #667eea;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            border: 1px solid #e8eaf0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
         }
+        
+        .stats-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+        }
+        
         .stats-card h3 {
             color: #2c3e50;
             margin-bottom: 20px;
-            font-size: 20px;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
+        
         .chart-container {
             position: relative;
             height: 300px;
         }
-        
-        /* Card Brand Badges */
-        .card-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            color: white;
-            margin: 5px;
-        }
-        
-        /* Risk Badges */
+
+        /* ============================================================
+           RISK ASSESSMENT - Professional Badges
+           ============================================================ */
         .risk-item {
-            margin: 15px 0;
+            margin: 12px 0;
             display: flex;
             align-items: center;
             gap: 15px;
-            padding: 12px;
-            background: white;
+            padding: 15px;
+            background: #f8f9fa;
             border-radius: 8px;
-        }
-        .badge {
-            display: inline-block;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
-            min-width: 110px;
-            text-align: center;
-        }
-        .badge-high { 
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-        .badge-medium { 
-            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-            color: #8b4513;
-        }
-        .badge-low { 
-            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-            color: #2d7a6e;
+            border-left: 4px solid transparent;
+            transition: all 0.2s ease;
         }
         
-        /* Accordion */
-        .findings-section { margin-top: 40px; }
+        .risk-item:hover {
+            background: #f0f2f5;
+            transform: translateX(5px);
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 110px;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge-high { 
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .risk-item:has(.badge-high) {
+            border-left-color: #e74c3c;
+        }
+        
+        .badge-medium { 
+            background: #f39c12;
+            color: white;
+        }
+        
+        .risk-item:has(.badge-medium) {
+            border-left-color: #f39c12;
+        }
+        
+        .badge-low { 
+            background: #27ae60;
+            color: white;
+        }
+        
+        .risk-item:has(.badge-low) {
+            border-left-color: #27ae60;
+        }
+
+        /* ============================================================
+           ACCORDION - Professional File Findings
+           ============================================================ */
+        .findings-section { 
+            margin-top: 40px; 
+        }
+        
         .accordion-item {
             background: white;
-            border: 1px solid #e0e0e0;
+            border: 1px solid #e8eaf0;
             border-radius: 10px;
             margin: 15px 0;
             overflow: hidden;
             transition: all 0.3s ease;
         }
+        
         .accordion-item:hover {
-            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
+        
         .accordion-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
             color: white;
             padding: 20px 30px;
             cursor: pointer;
@@ -284,258 +365,246 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
             justify-content: space-between;
             align-items: center;
             user-select: none;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
         }
+        
         .accordion-header:hover {
-            background: linear-gradient(135deg, #5568d3 0%, #6a4291 100%);
+            background: linear-gradient(135deg, #2c3e50 0%, #1a252f 100%);
         }
+        
         .accordion-header .file-info {
             flex: 1;
+            min-width: 0; /* Allow text truncation */
         }
+        
         .accordion-header .file-name {
             font-weight: 600;
             font-size: 16px;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
         }
+        
         .accordion-header .file-path {
             font-size: 12px;
             opacity: 0.85;
-            font-family: 'Courier New', monospace;
+            font-family: 'Courier New', 'Consolas', monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
+        
         .accordion-header .card-count {
-            margin: 0 20px;
-            font-size: 15px;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 15px;
+            min-width: 60px;
+            text-align: center;
         }
+        
         .accordion-header .toggle-icon {
             font-size: 24px;
             transition: transform 0.3s ease;
+            opacity: 0.9;
         }
+        
         .accordion-item.active .toggle-icon {
             transform: rotate(180deg);
         }
+        
         .accordion-body {
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.4s ease;
             background: #f8f9fa;
         }
-        .accordion-item.active .accordion-body {
-            max-height: 3000px;
-        }
-        .accordion-content { padding: 25px 30px; }
         
-        /* Finding Item */
+        .accordion-item.active .accordion-body {
+            max-height: 5000px; /* Increased for full paths */
+        }
+        
+        .accordion-content { 
+            padding: 25px 30px; 
+        }
+
+        /* ============================================================
+           FINDING ITEMS - Professional Card Display
+           ============================================================ */
         .finding-item {
             background: white;
-            padding: 18px;
+            padding: 18px 20px;
             margin: 12px 0;
             border-radius: 8px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #3498db;
             display: grid;
-            grid-template-columns: 100px 150px 1fr;
+            grid-template-columns: 80px auto 1fr;
             gap: 20px;
             align-items: center;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .finding-item:hover {
-            transform: translateX(5px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .finding-line {
-            color: #7f8c8d;
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        .finding-type {
-            font-weight: 600;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            text-align: center;
-        }
-        .finding-card {
-            font-family: 'Courier New', monospace;
-            color: #e74c3c;
-            font-weight: bold;
-            font-size: 16px;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
         }
         
-        /* No Findings */
+        .finding-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+        }
+        
+        .finding-line {
+            color: #7f8c8d;
+            font-family: 'Courier New', 'Consolas', monospace;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .finding-type {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .finding-card {
+            font-family: 'Courier New', 'Consolas', monospace;
+            color: #e74c3c;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: 0.5px;
+        }
+
+        /* ============================================================
+           NO FINDINGS STATE
+           ============================================================ */
         .no-findings {
             text-align: center;
             padding: 80px 20px;
             background: linear-gradient(135deg, #eafaf1 0%, #d5f4e6 100%);
             border-radius: 12px;
             margin: 30px 0;
+            border: 2px dashed #27ae60;
         }
+        
         .no-findings .icon {
-            font-size: 72px;
+            font-size: 64px;
             margin-bottom: 20px;
         }
+        
         .no-findings h3 {
             color: #27ae60;
             font-size: 24px;
             margin-bottom: 10px;
+            font-weight: 600;
         }
+        
         .no-findings p {
             color: #2d7a6e;
             font-size: 16px;
+            font-weight: 400;
         }
-        
-        /* Footer */
+
+        /* ============================================================
+           FOOTER
+           ============================================================ */
         footer {
             background: #2c3e50;
             color: white;
             padding: 30px;
             text-align: center;
-            margin-top: 40px;
+            border-top: 4px solid #3498db;
         }
-        footer p { margin: 5px 0; opacity: 0.9; }
         
-        /* Responsive */
+        footer p { 
+            margin: 5px 0; 
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        footer .timestamp {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 10px;
+        }
+
+        /* ============================================================
+           RESPONSIVE DESIGN
+           ============================================================ */
         @media (max-width: 768px) {
             .content { padding: 20px; }
+            .header { padding: 30px 20px; }
             .summary-grid { grid-template-columns: 1fr; }
             .stats-grid { grid-template-columns: 1fr; }
-            .finding-item { grid-template-columns: 1fr; gap: 10px; }
-            .accordion-header { flex-direction: column; gap: 10px; }
+            .finding-item { 
+                grid-template-columns: 1fr; 
+                gap: 10px; 
+            }
+            .accordion-header { 
+                flex-direction: column; 
+                gap: 10px; 
+                align-items: flex-start;
+            }
+            .accordion-header .card-count {
+                margin: 0;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- ============================================================
+             HEADER
+             ============================================================ -->
         <div class="header">
-            <h1>🔍 BasicPanScanner Security Report</h1>
-            <div class="version">Version ` + report.Version + ` | PCI DSS Compliance Scanner</div>
+            <h1>🔐 BasicPanScanner Security Report</h1>
+            <div class="subtitle">PCI DSS Compliance Scanner</div>
+            <div class="version">Version ` + report.Version + `</div>
         </div>
         
         <div class="content">`)
 
 	// ============================================================
-	// EXECUTIVE SUMMARY
+	// EXECUTIVE SUMMARY - Professional Format
 	// ============================================================
 
 	riskLevel, riskColor := report.GetRiskLevel()
 
-	// Build executive summary text
-	summaryText := fmt.Sprintf(
-		"On %s, a comprehensive security scan was conducted on directory <span class='highlight'>%s</span>, "+
-			"covering <span class='highlight'>%d files</span> across various file types. "+
-			"The scan completed in <span class='highlight'>%s</span>, analyzing files for credit card data "+
-			"in compliance with PCI DSS requirements.",
-		report.ScanDate.Format("January 2, 2006"),
-		report.Directory,
-		report.ScannedFiles,
-		report.GetFormattedDuration(),
-	)
-
-	var findingsText, recommendationText string
-	if report.CardsFound > 0 {
-		findingsText = fmt.Sprintf(
-			"The scan <strong>identified <span class='highlight' style='font-size: 24px;'>%d credit card number(s)</span></strong> "+
-				"across <span class='highlight'>%d file(s)</span>. ",
-			report.CardsFound,
-			report.Statistics.FilesWithCards,
-		)
-
-		// Add card type breakdown
-		if len(report.Statistics.CardsByType) > 0 {
-			var cardTypes []string
-			for cardType, count := range report.Statistics.CardsByType {
-				cardTypes = append(cardTypes, fmt.Sprintf("%s (%d)", cardType, count))
-			}
-			findingsText += "Card types detected include: " + strings.Join(cardTypes, ", ") + ". "
-		}
-
-		// Risk level assessment
-		findingsText += fmt.Sprintf(
-			"Overall risk assessment: <strong style='color: %s; font-size: 20px;'>%s</strong>",
-			riskColor, riskLevel,
-		)
-
-		// Recommendations based on findings
-		if report.Statistics.HighRiskFiles > 0 {
-			recommendationText = fmt.Sprintf(
-				"<strong>⚠️ Critical Action Required</strong> "+
-					"%d file(s) contain 5 or more credit card numbers, indicating a high risk of data exposure. "+
-					"<strong>Immediate remediation is recommended:</strong> "+
-					"<ul style='margin: 10px 0 0 20px;'>"+
-					"<li>Review and remove or encrypt all exposed credit card data</li>"+
-					"<li>Implement access controls to restrict file permissions</li>"+
-					"<li>Conduct a thorough investigation of how card data entered these files</li>"+
-					"<li>Update data handling procedures to prevent future exposure</li>"+
-					"<li>Consider conducting regular automated scans for ongoing compliance</li>"+
-					"</ul>",
-				report.Statistics.HighRiskFiles,
-			)
-		} else if report.Statistics.MediumRiskFiles > 0 {
-			recommendationText = fmt.Sprintf(
-				"<strong>⚠️ Action Required</strong> "+
-					"%d file(s) contain multiple credit card numbers. "+
-					"<strong>Recommended actions:</strong> "+
-					"<ul style='margin: 10px 0 0 20px;'>"+
-					"<li>Review flagged files and remove sensitive data</li>"+
-					"<li>Implement data masking or encryption where appropriate</li>"+
-					"<li>Verify compliance with PCI DSS data storage requirements</li>"+
-					"<li>Establish secure data handling protocols</li>"+
-					"</ul>",
-				report.Statistics.MediumRiskFiles,
-			)
-		} else {
-			recommendationText =
-				"<strong>✓ Low Risk Detected</strong> " +
-					"While only single instances of card data were found, " +
-					"<strong>action is still recommended:</strong> " +
-					"<ul style='margin: 10px 0 0 20px;'>" +
-					"<li>Review and remove identified card data</li>" +
-					"<li>Verify the data is not required for business purposes</li>" +
-					"<li>Implement preventive measures to avoid future exposure</li>" +
-					"</ul>"
-		}
-	} else {
-		findingsText = "<strong>✓ No credit card numbers were detected</strong> in any of the scanned files. "
-		recommendationText =
-			"<strong>✓ Compliant</strong> " +
-				"The scanned directory appears to be compliant with PCI DSS requirements regarding cardholder data storage. " +
-				"<strong>Recommendations for ongoing compliance:</strong> " +
-				"<ul style='margin: 10px 0 0 20px;'>" +
-				"<li>Continue regular security scans to maintain compliance</li>" +
-				"<li>Ensure staff training on proper cardholder data handling</li>" +
-				"<li>Review and update data security policies periodically</li>" +
-				"</ul>"
+	// Risk indicator emoji
+	riskEmoji := "🟢"
+	if riskLevel == "High" {
+		riskEmoji = "🔴"
+	} else if riskLevel == "Medium" {
+		riskEmoji = "🟡"
 	}
 
-	html.WriteString(fmt.Sprintf(`
-            <div class="executive-summary">
-                <h2>📋 Executive Summary</h2>
-                <div class="summary-text">%s</div>
-                <div class="summary-text">%s</div>
-                <div class="recommendation">%s</div>
-            </div>`, summaryText, findingsText, recommendationText))
-
-	// ============================================================
-	// SUMMARY CARDS
-	// ============================================================
-
 	html.WriteString(`
-            <div class="summary-grid">
-                <div class="summary-card">
-                    <div class="summary-label">Scan Duration</div>
-                    <div class="summary-value">` + report.GetFormattedDuration() + `</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-label">Files Scanned</div>
-                    <div class="summary-value">` + fmt.Sprintf("%d", report.ScannedFiles) + `</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-label">Cards Found</div>
-                    <div class="summary-value">` + fmt.Sprintf("%d", report.CardsFound) + `</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-label">Risk Level</div>
-                    <div class="summary-value">` + riskLevel + `</div>
+            <div class="executive-summary">
+                <h2>📊 Executive Summary</h2>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="label">Scan Date</div>
+                        <div class="value">` + report.ScanDate.Format("Jan 2, 2006") + `</div>
+                        <div class="subtext">` + report.ScanDate.Format("15:04:05 MST") + `</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Duration</div>
+                        <div class="value">` + report.GetFormattedDuration() + `</div>
+                        <div class="subtext">` + fmt.Sprintf("%.1f files/sec", report.ScanRate) + `</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Files Scanned</div>
+                        <div class="value">` + fmt.Sprintf("%d", report.ScannedFiles) + `</div>
+                        <div class="subtext">of ` + fmt.Sprintf("%d", report.TotalFiles) + ` total files</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Cards Found</div>
+                        <div class="value">` + fmt.Sprintf("%d", report.CardsFound) + `</div>
+                        <div class="subtext">in ` + fmt.Sprintf("%d", report.Statistics.FilesWithCards) + ` files</div>
+                    </div>
+                    <div class="summary-item" style="background: ` + riskColor + `20; border: 2px solid ` + riskColor + `;">
+                        <div class="label">Risk Level</div>
+                        <div class="value">` + riskEmoji + ` ` + riskLevel + `</div>
+                        <div class="subtext">Overall assessment</div>
+                    </div>
                 </div>
             </div>`)
 
@@ -546,7 +615,7 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
 	if report.CardsFound > 0 {
 		html.WriteString(`
             <div class="stats-section">
-                <h2>📊 Detailed Statistics</h2>
+                <h2>📈 Detailed Statistics</h2>
                 <div class="stats-grid">`)
 
 		// Card Type Distribution Chart
@@ -591,7 +660,7 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
                             datasets: [{
                                 data: ` + toJSONIntArray(cardCounts) + `,
                                 backgroundColor: ` + toJSONArray(cardColors) + `,
-                                borderWidth: 2,
+                                borderWidth: 3,
                                 borderColor: '#fff'
                             }]
                         },
@@ -601,7 +670,11 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
                             plugins: {
                                 legend: {
                                     position: 'right',
-                                    labels: { padding: 15, font: { size: 13 } }
+                                    labels: { 
+                                        padding: 15, 
+                                        font: { size: 13, weight: '600' },
+                                        color: '#2c3e50'
+                                    }
                                 },
                                 tooltip: {
                                     callbacks: {
@@ -610,7 +683,11 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
                                             const percentage = ((context.parsed / total) * 100).toFixed(1);
                                             return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
                                         }
-                                    }
+                                    },
+                                    backgroundColor: 'rgba(44, 62, 80, 0.9)',
+                                    padding: 12,
+                                    bodyFont: { size: 13 },
+                                    titleFont: { size: 14, weight: 'bold' }
                                 }
                             }
                         }
@@ -623,16 +700,16 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
                     <div class="stats-card">
                         <h3>⚠️ Risk Assessment</h3>
                         <div class="risk-item">
-                            <span class="badge badge-high">HIGH RISK</span>
-                            <span>` + fmt.Sprintf("%d files with 5+ cards", report.Statistics.HighRiskFiles) + `</span>
+                            <span class="badge badge-high">High Risk</span>
+                            <span style="flex: 1;">` + fmt.Sprintf("%d files with 5+ cards", report.Statistics.HighRiskFiles) + `</span>
                         </div>
                         <div class="risk-item">
-                            <span class="badge badge-medium">MEDIUM RISK</span>
-                            <span>` + fmt.Sprintf("%d files with 2-4 cards", report.Statistics.MediumRiskFiles) + `</span>
+                            <span class="badge badge-medium">Medium Risk</span>
+                            <span style="flex: 1;">` + fmt.Sprintf("%d files with 2-4 cards", report.Statistics.MediumRiskFiles) + `</span>
                         </div>
                         <div class="risk-item">
-                            <span class="badge badge-low">LOW RISK</span>
-                            <span>` + fmt.Sprintf("%d files with 1 card", report.Statistics.LowRiskFiles) + `</span>
+                            <span class="badge badge-low">Low Risk</span>
+                            <span style="flex: 1;">` + fmt.Sprintf("%d files with 1 card", report.Statistics.LowRiskFiles) + `</span>
                         </div>
                     </div>`)
 
@@ -642,13 +719,13 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
 	}
 
 	// ============================================================
-	// DETAILED FINDINGS (Accordion)
+	// DETAILED FINDINGS (Accordion with Full Paths)
 	// ============================================================
 
 	if len(report.GroupedByFile) > 0 {
 		html.WriteString(`
             <div class="stats-section">
-                <h2>🔎 Detailed Findings</h2>`)
+                <h2>🔍 Detailed Findings</h2>`)
 
 		// Sort file paths
 		var filePaths []string
@@ -657,26 +734,45 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
 		}
 		sort.Strings(filePaths)
 
-		// Create accordion items
+		// Create accordion items with full paths
 		for _, filePath := range filePaths {
 			findings := report.GroupedByFile[filePath]
+			fileName := filepath.Base(filePath)
 
 			html.WriteString(fmt.Sprintf(`
                 <div class="accordion-item">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
-                        <span>%s</span>
-                        <span>%d cards</span>
+                        <div class="file-info">
+                            <div class="file-name">📄 %s</div>
+                            <div class="file-path" title="%s">%s</div>
+                        </div>
+                        <span class="card-count">%d cards</span>
+                        <span class="toggle-icon">▼</span>
                     </div>
                     <div class="accordion-body">
-                        <div class="accordion-content">`, filepath.Base(filePath), len(findings)))
+                        <div class="accordion-content">`,
+				fileName,
+				filePath,       // Full path in title (shows on hover)
+				filePath,       // Full path displayed in header
+				len(findings))) // THIS WAS MISSING - Card count!
 
+			// Display each finding in this file
 			for _, finding := range findings {
+				cardIcon := getCardIcon(finding.CardType)
+
 				html.WriteString(fmt.Sprintf(`
                             <div class="finding-item">
                                 <div class="finding-line">Line %d</div>
-                                <div class="finding-type">%s %s</div>
+                                <div class="finding-type">
+                                    %s
+                                    <span>%s</span>
+                                </div>
                                 <div class="finding-card">%s</div>
-                            </div>`, finding.LineNumber, getCardIcon(finding.CardType), finding.CardType, finding.MaskedCard))
+                            </div>`,
+					finding.LineNumber,
+					cardIcon,
+					finding.CardType,
+					finding.MaskedCard))
 			}
 
 			html.WriteString(`
@@ -688,11 +784,12 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
 		html.WriteString(`
             </div>`)
 	} else {
+		// No findings - show success message
 		html.WriteString(`
-            <div style="text-align: center; padding: 60px 20px; color: #27ae60; font-size: 20px;">
-                <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
-                <div>No credit card numbers found</div>
-                <p style="font-size: 16px; margin-top: 10px;">Files are compliant with PCI DSS</p>
+            <div class="no-findings">
+                <div class="icon">✅</div>
+                <h3>No Credit Card Numbers Found</h3>
+                <p>All scanned files are compliant with PCI DSS requirements</p>
             </div>`)
 	}
 
@@ -704,20 +801,40 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
         </div>
         
         <footer>
-            <p><strong>BasicPanScanner v` + report.Version + `</strong> | PCI Compliance Tool</p>
-            <p>Report generated on ` + report.ScanDate.Format("January 2, 2006 at 15:04:05") + `</p>
+            <p><strong>BasicPanScanner v` + report.Version + `</strong></p>
+            <p>PCI DSS Compliance Tool | Secure Card Detection</p>
+            <p class="timestamp">Report generated on ` + report.ScanDate.Format("Monday, January 2, 2006 at 15:04:05 MST") + `</p>
         </footer>
     </div>
     
     <script>
+        // ============================================================
+        // ACCORDION TOGGLE FUNCTIONALITY
+        // ============================================================
+        // This function handles the expand/collapse behavior of findings
+        //
+        // Parameters:
+        //   - header: The clicked accordion header element
+        //
+        // Behavior:
+        //   - Collapses all other accordion items
+        //   - Toggles the clicked item (expand if collapsed, collapse if expanded)
+        //   - Smooth animation via CSS transition
         function toggleAccordion(header) {
+            // Get the parent accordion item
             const item = header.parentElement;
+            
+            // Check if this item is currently active
             const wasActive = item.classList.contains('active');
             
+            // Close all accordion items first
+            // This ensures only one item is open at a time
             document.querySelectorAll('.accordion-item').forEach(accordionItem => {
                 accordionItem.classList.remove('active');
             });
             
+            // If the clicked item wasn't active, activate it
+            // This creates a toggle effect
             if (!wasActive) {
                 item.classList.add('active');
             }
@@ -726,17 +843,39 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
 </body>
 </html>`)
 
-	// Write to file
+	// ============================================================
+	// WRITE TO FILE
+	// ============================================================
+
+	// Write the complete HTML to the file
+	// Using 0644 permissions: owner can read/write, group and others can read
 	return os.WriteFile(filename, []byte(html.String()), 0644)
 }
 
-// Helper functions for JSON array conversion
+// ============================================================
+// HELPER FUNCTIONS FOR JSON CONVERSION
+// ============================================================
 
 // toJSONArray converts a string slice to JSON array format
+// This is used for Chart.js data labels
+//
+// Parameters:
+//   - items: Slice of strings to convert
+//
+// Returns:
+//   - string: JSON array format (e.g., '["Visa","Mastercard","Amex"]')
+//
+// Example:
+//
+//	input:  []string{"Visa", "Mastercard", "Amex"}
+//	output: '["Visa","Mastercard","Amex"]'
+//
+// Note: This function properly escapes quotes in item values
 func toJSONArray(items []string) string {
 	var parts []string
 	for _, item := range items {
-		// Escape quotes in item
+		// Escape any quotes in the item value
+		// This prevents JSON syntax errors
 		escaped := strings.ReplaceAll(item, `"`, `\"`)
 		parts = append(parts, `"`+escaped+`"`)
 	}
@@ -744,6 +883,20 @@ func toJSONArray(items []string) string {
 }
 
 // toJSONIntArray converts an int slice to JSON array format
+// This is used for Chart.js data values
+//
+// Parameters:
+//   - items: Slice of integers to convert
+//
+// Returns:
+//   - string: JSON array format (e.g., '[15,8,3]')
+//
+// Example:
+//
+//	input:  []int{15, 8, 3}
+//	output: '[15,8,3]'
+//
+// Note: Integers don't need quotes in JSON
 func toJSONIntArray(items []int) string {
 	var parts []string
 	for _, item := range items {
