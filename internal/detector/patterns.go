@@ -1,6 +1,6 @@
-// Package detector - Enhanced Card Pattern Definitions
+// Package detector - Enhanced Card pattern definitions
 // This file contains improved regex patterns for detecting different card types
-// with reduced false positives and better accuracy
+// with better precision and reduced false positives
 package detector
 
 import (
@@ -12,15 +12,9 @@ import (
 // Each pattern combines:
 //   - Name: Card issuer (e.g., "Visa", "Mastercard")
 //   - Pattern: Regex that matches the card format
-//   - MinLength: Minimum valid length for this card type
-//   - MaxLength: Maximum valid length for this card type
-//   - ValidLengths: Specific valid lengths (more precise than min/max)
 type CardPattern struct {
-	Name         string         // Card issuer name
-	Pattern      *regexp.Regexp // Compiled regex pattern
-	MinLength    int            // Minimum card length
-	MaxLength    int            // Maximum card length
-	ValidLengths []int          // Valid specific lengths
+	Name    string         // Card issuer name
+	Pattern *regexp.Regexp // Compiled regex pattern
 }
 
 // Global variable holding all card patterns
@@ -30,6 +24,19 @@ var cardPatterns []CardPattern
 // InitPatterns compiles and initializes all card detection patterns
 // This function MUST be called before using any detection functions
 // It should be called once during application startup
+//
+// Important Note About Go's RE2 Engine:
+// Go uses the RE2 regex engine which does NOT support backreferences (\1, \2, etc.)
+// This is a deliberate design choice for performance and security.
+//
+// Impact on Detection:
+// - We cannot enforce consistent separators (e.g., all spaces OR all dashes)
+// - This means "4532 0151-1283 0366" (mixed separators) will match
+// - However, this is ACCEPTABLE because:
+//  1. The Luhn algorithm still validates the card number
+//  2. Mixed separators are rare in real-world data
+//  3. Word boundaries (\b) prevent most false positives
+//  4. The performance gain from RE2 is significant
 //
 // Returns:
 //   - error: Error if any regex pattern fails to compile
@@ -43,56 +50,65 @@ var cardPatterns []CardPattern
 //	     Now ready to detect cards
 //	}
 func InitPatterns() error {
-	// Define all patterns with enhanced boundary detection
-	// We use word boundaries and negative lookahead/lookbehind to reduce false positives
+	// Define all patterns with enhanced precision
+	// Each regex is designed to:
+	// 1. Match valid card number formats (with or without separators)
+	// 2. Use word boundaries to avoid matching within larger numbers
+	// 3. Handle cards embedded in text
+	// 4. Prevent matching invalid sequences
+	//
+	// NOTE: NO backreferences (\1, \2) are used because Go's RE2 doesn't support them
 
 	patterns := []struct {
-		name         string
-		pattern      string
-		minLength    int
-		maxLength    int
-		validLengths []int
+		name    string
+		pattern string
 	}{
 		// ============================================================
 		// VISA
 		// - Starts with: 4
-		// - Length: 13, 16, or 19 digits (most common: 16)
-		// - BIN ranges: 4xxxxx
-		// - Enhanced: Added boundary checks to avoid matching longer numbers
+		// - Length: 13, 16, or 19 digits
+		// - Format: 4xxx xxxx xxxx xxxx (standard 16-digit)
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - 4           : Starts with 4 (Visa prefix)
+		// - \d{3}       : 3 more digits (makes 4xxx)
+		// - [\s\-]*     : Zero or more separators (handles multiple spaces)
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits (16 digits total so far)
+		// - (?:[\s\-]*\d{3}){0,2} : Optional extra digits for 19-digit cards
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "Visa",
-			// Pattern breakdown:
-			// (?:^|[^0-9]) - Start of string OR non-digit (negative lookbehind alternative)
-			// (4) - Must start with 4
-			// (?:[0-9][\s\-]?){12} - Exactly 12 more digits for 13-digit cards
-			// (?:...) groups for 16 and 19 digit variants
-			// (?:[^0-9]|$) - End with non-digit or end of string
-			pattern:      `(?:^|[^\d])(4\d{3}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d(?:\d{3})?(?:[\s\-]?\d{3})?)(?:[^\d]|$)`,
-			minLength:    13,
-			maxLength:    19,
-			validLengths: []int{13, 16, 19},
+			"Visa",
+			`\b4\d{3}[\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{4}(?:[\s\-]*\d{3}){0,2}\b`,
 		},
 
 		// ============================================================
 		// MASTERCARD
-		// - Starts with: 51-55 OR 2221-2720 (newer BIN range)
+		// - Starts with: 51-55 (old range) OR 2221-2720 (new range)
 		// - Length: 16 digits only
-		// - Enhanced: More precise BIN range matching
+		// - Format: 5xxx xxxx xxxx xxxx or 22xx xxxx xxxx xxxx
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - (?:5[1-5]|2(?:22[1-9]|2[3-9]\d|[3-6]\d{2}|7[01]\d|720))
+		//   This matches the valid prefixes
+		// - \d{2}       : 2 more digits (completes first 4)
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "MasterCard",
-			// Pattern breakdown:
-			// (?:^|[^\d]) - Boundary check
-			// (?:5[1-5]\d{2}|222[1-9]\d{1}|22[3-9]\d{2}|2[3-6]\d{3}|27[01]\d{2}|2720)
-			//   - 51-55 followed by 2 digits (traditional range)
-			//   - 2221-2720 (new range, broken down for regex efficiency)
-			// [\s\-]? - Optional separator
-			// \d{4} groups - 4-digit groups
-			pattern:      `(?:^|[^\d])((?:5[1-5]\d{2}|222[1-9]\d{1}|22[3-9]\d{2}|2[3-6]\d{3}|27[01]\d{2}|2720)[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4})(?:[^\d]|$)`,
-			minLength:    16,
-			maxLength:    16,
-			validLengths: []int{16},
+			"MasterCard",
+			`\b(?:5[1-5]|2(?:22[1-9]|2[3-9]\d|[3-6]\d{2}|7[01]\d|720))\d{2}[\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{4}\b`,
 		},
 
 		// ============================================================
@@ -100,172 +116,231 @@ func InitPatterns() error {
 		// - Starts with: 34 or 37
 		// - Length: 15 digits only
 		// - Format: 3xxx xxxxxx xxxxx (4-6-5 grouping)
-		// - Enhanced: Strict 15-digit enforcement
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - 3[47]       : Starts with 34 or 37
+		// - \d{2}       : 2 more digits (makes 3xxx)
+		// - [\s\-]*     : Zero or more separators
+		// - \d{6}       : 6 digits (Amex uses 4-6-5 grouping)
+		// - [\s\-]*     : Zero or more separators
+		// - \d{5}       : 5 digits
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "Amex",
-			// Pattern ensures exactly 15 digits with Amex-specific grouping
-			pattern:      `(?:^|[^\d])(3[47]\d{2}[\s\-]?\d{6}[\s\-]?\d{5})(?:[^\d]|$)`,
-			minLength:    15,
-			maxLength:    15,
-			validLengths: []int{15},
+			"Amex",
+			`\b3[47]\d{2}[\s\-]*\d{6}[\s\-]*\d{5}\b`,
 		},
 
 		// ============================================================
 		// DISCOVER
 		// - Starts with: 6011, 622126-622925, 644-649, or 65
-		// - Length: 16 digits (some sources say 16-19, but 16 is standard)
-		// - Enhanced: Comprehensive BIN coverage
+		// - Length: 16 digits only
+		// - Format: 6xxx xxxx xxxx xxxx
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - (?:6011|65\d{2}|64[4-9]\d|622(?:1[2-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))
+		//   This matches the valid prefixes
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "Discover",
-			// Complex pattern covering all Discover BIN ranges
-			pattern:      `(?:^|[^\d])((?:6011|65\d{2}|64[4-9]\d|622(?:1[2-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))\d{0,2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4})(?:[^\d]|$)`,
-			minLength:    16,
-			maxLength:    16,
-			validLengths: []int{16},
+			"Discover",
+			`\b(?:6011|65\d{2}|64[4-9]\d|622(?:1[2-9]\d|[2-8]\d{2}|9[01]\d|92[0-5]))[\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{4}\b`,
 		},
 
 		// ============================================================
 		// DINERS CLUB
 		// - Starts with: 36, 38, or 300-305
-		// - Length: 14 digits (US/Canada), 14-19 internationally
-		// - Enhanced: Focus on 14-digit standard
+		// - Length: 14 digits only
+		// - Format: 3xxx xxxxxx xxxx (4-6-4 grouping)
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - 3(?:0[0-5]|[68]\d)
+		//   This matches the valid prefixes
+		// - \d          : 1 more digit (makes 3xxx)
+		// - [\s\-]*     : Zero or more separators
+		// - \d{6}       : 6 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "Diners",
-			// Pattern for 14-digit Diners Club cards
-			pattern:      `(?:^|[^\d])(3(?:0[0-5]|[68]\d)\d[\s\-]?\d{6}[\s\-]?\d{4})(?:[^\d]|$)`,
-			minLength:    14,
-			maxLength:    14,
-			validLengths: []int{14},
+			"Diners",
+			`\b3(?:0[0-5]|[68]\d)\d[\s\-]*\d{6}[\s\-]*\d{4}\b`,
 		},
 
 		// ============================================================
 		// JCB
 		// - Starts with: 3528-3589
-		// - Length: 16 digits (sometimes 15-19, but 16 is standard)
-		// - Enhanced: Precise range matching
+		// - Length: 16 digits only
+		// - Format: 35xx xxxx xxxx xxxx
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - 35(?:2[89]|[3-8]\d)
+		//   This matches the valid prefixes
+		// - \d          : 1 more digit (makes 35xx)
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "JCB",
-			// JCB cards starting with 35xx range
-			pattern:      `(?:^|[^\d])(35(?:2[89]|[3-8]\d)\d[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4})(?:[^\d]|$)`,
-			minLength:    16,
-			maxLength:    16,
-			validLengths: []int{16},
+			"JCB",
+			`\b35(?:2[89]|[3-8]\d)\d[\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{4}\b`,
 		},
 
 		// ============================================================
 		// CHINA UNIONPAY
 		// - Starts with: 62
 		// - Length: 16-19 digits
-		// - Enhanced: Flexible length handling
+		// - Format: 62xx xxxx xxxx xxxx (and variants)
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - 62\d{2}     : Starts with 62 + 2 more digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits (16 digits total so far)
+		// - (?:[\s\-]*\d{3}){0,2} : Optional extra digits for 19-digit cards
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "UnionPay",
-			// UnionPay with variable length support
-			pattern:      `(?:^|[^\d])(62\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?:[\s\-]?\d{1,3})?)(?:[^\d]|$)`,
-			minLength:    16,
-			maxLength:    19,
-			validLengths: []int{16, 17, 18, 19},
+			"UnionPay",
+			`\b62\d{2}[\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{4}(?:[\s\-]*\d{3}){0,2}\b`,
 		},
 
 		// ============================================================
 		// MAESTRO
-		// - Starts with: 50, 56-69, 6390, 67
+		// - Starts with: 50, 56-69
 		// - Length: 12-19 digits (very flexible)
-		// - Enhanced: Support for all length variants
+		// - Format: Variable (most flexible card type)
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - (?:5[06789]|6\d)
+		//   This matches the valid prefixes
+		// - \d{2}       : 2 more digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{1,7}     : 1-7 digits (flexible length)
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "Maestro",
-			// Maestro with highly variable length
-			pattern:      `(?:^|[^\d])((?:5[06-9]|6[0-9])\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{2,7})(?:[^\d]|$)`,
-			minLength:    12,
-			maxLength:    19,
-			validLengths: []int{12, 13, 14, 15, 16, 17, 18, 19},
+			"Maestro",
+			`\b(?:5[06789]|6\d)\d{2}[\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{1,7}\b`,
 		},
 
 		// ============================================================
 		// RUPAY (India)
-		// - Starts with: 60, 6521, 6522, 6531-6536
+		// - Starts with: 60, 6521, or 6522
 		// - Length: 16 digits
-		// - Enhanced: Added more BIN ranges
+		// - Format: 60xx xxxx xxxx xxxx
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - (?:60|652[12])
+		//   This matches the valid prefixes
+		// - \d{2}       : 2 more digits (unless prefix is already 4 digits)
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name: "RuPay",
-			// RuPay with comprehensive BIN coverage
-			pattern:      `(?:^|[^\d])((?:60|652[12]|653[1-6])\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4})(?:[^\d]|$)`,
-			minLength:    16,
-			maxLength:    16,
-			validLengths: []int{16},
+			"RuPay",
+			`\b(?:60|652[12])\d{2}[\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{4}\b`,
 		},
 
 		// ============================================================
 		// TROY (Turkey)
 		// - Starts with: 9792
 		// - Length: 16 digits
-		// - Enhanced: Precise pattern
+		// - Format: 9792 xxxx xxxx xxxx
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - 9792        : Exact prefix
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name:         "Troy",
-			pattern:      `(?:^|[^\d])(9792[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4})(?:[^\d]|$)`,
-			minLength:    16,
-			maxLength:    16,
-			validLengths: []int{16},
+			"Troy",
+			`\b9792[\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{4}\b`,
 		},
 
 		// ============================================================
 		// MIR (Russia)
 		// - Starts with: 2200-2204
 		// - Length: 16 digits
-		// - Enhanced: Precise range
+		// - Format: 220x xxxx xxxx xxxx
+		//
+		// Pattern explanation:
+		// - \b          : Word boundary (start)
+		// - 220[0-4]    : Starts with 2200-2204
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - [\s\-]*     : Zero or more separators
+		// - \d{4}       : 4 digits
+		// - \b          : Word boundary (end)
 		// ============================================================
 		{
-			name:         "Mir",
-			pattern:      `(?:^|[^\d])(220[0-4][\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4})(?:[^\d]|$)`,
-			minLength:    16,
-			maxLength:    16,
-			validLengths: []int{16},
+			"Mir",
+			`\b220[0-4][\s\-]*\d{4}[\s\-]*\d{4}[\s\-]*\d{4}\b`,
 		},
 	}
 
-	// ============================================================
-	// Compile all patterns and validate
-	// ============================================================
-
+	// Compile all patterns
+	// Pre-compiling patterns once at startup is much faster than
+	// compiling them every time we need to detect cards
 	cardPatterns = make([]CardPattern, 0, len(patterns))
 
 	for _, p := range patterns {
-		// Compile the regex pattern with case-insensitive flag
-		// This helps detect cards even if they're in mixed contexts
+		// Compile the regex pattern
+		// This validates the pattern and creates an optimized matcher
 		regex, err := regexp.Compile(p.pattern)
 		if err != nil {
 			// If compilation fails, return error with pattern name
+			// This helps developers identify which pattern has a syntax error
 			return fmt.Errorf("failed to compile pattern for %s: %w", p.name, err)
-		}
-
-		// Validate pattern configuration
-		if p.minLength <= 0 || p.maxLength <= 0 {
-			return fmt.Errorf("invalid length configuration for %s", p.name)
-		}
-
-		if p.minLength > p.maxLength {
-			return fmt.Errorf("min length > max length for %s", p.name)
 		}
 
 		// Add compiled pattern to list
 		cardPatterns = append(cardPatterns, CardPattern{
-			Name:         p.name,
-			Pattern:      regex,
-			MinLength:    p.minLength,
-			MaxLength:    p.maxLength,
-			ValidLengths: p.validLengths,
+			Name:    p.name,
+			Pattern: regex,
 		})
 	}
 
-	// Success! All patterns compiled
-	fmt.Printf("✓ Loaded %d card issuer patterns (enhanced)\n", len(cardPatterns))
+	// Success! All patterns compiled without errors
+	fmt.Printf("✓ Loaded %d card issuer patterns\n", len(cardPatterns))
 	return nil
 }
 
@@ -278,7 +353,7 @@ func InitPatterns() error {
 // Example:
 //
 //	for _, pattern := range detector.GetPatterns() {
-//	    fmt.Printf("Pattern: %s (lengths: %v)\n", pattern.Name, pattern.ValidLengths)
+//	    fmt.Printf("Pattern: %s\n", pattern.Name)
 //	}
 func GetPatterns() []CardPattern {
 	return cardPatterns
@@ -289,45 +364,11 @@ func GetPatterns() []CardPattern {
 //
 // Returns:
 //   - int: Number of patterns loaded
-func GetPatternCount() int {
-	return len(cardPatterns)
-}
-
-// ValidateCardLength checks if a card number has a valid length for its type
-// This is an additional validation step beyond Luhn
-//
-// Parameters:
-//   - cardNumber: Card number (digits only)
-//   - cardType: Card issuer name
-//
-// Returns:
-//   - bool: true if length is valid for this card type
 //
 // Example:
 //
-//	ValidateCardLength("4532015112830366", "Visa") => true (16 digits)
-//	ValidateCardLength("453201511283036", "Visa") => false (15 digits)
-func ValidateCardLength(cardNumber string, cardType string) bool {
-	// Find the pattern for this card type
-	for _, pattern := range cardPatterns {
-		if pattern.Name == cardType {
-			length := len(cardNumber)
-
-			// Check against valid lengths if specified
-			if len(pattern.ValidLengths) > 0 {
-				for _, validLen := range pattern.ValidLengths {
-					if length == validLen {
-						return true
-					}
-				}
-				return false
-			}
-
-			// Otherwise check min/max range
-			return length >= pattern.MinLength && length <= pattern.MaxLength
-		}
-	}
-
-	// Pattern not found
-	return false
+//	count := detector.GetPatternCount()
+//	fmt.Printf("Loaded %d patterns\n", count)
+func GetPatternCount() int {
+	return len(cardPatterns)
 }
