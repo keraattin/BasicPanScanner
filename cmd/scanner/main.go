@@ -5,13 +5,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"runtime"
 	"strings"
 
 	"../../internal/config"
-	"../../internal/detector"
 	"../../internal/filter"
 	"../../internal/report"
 	"../../internal/scanner"
@@ -54,15 +52,6 @@ func main() {
 	// ============================================================
 
 	ui.ShowBanner(Version)
-
-	// ============================================================
-	// STEP 3: Initialize card detection patterns
-	// ============================================================
-
-	err := detector.InitPatterns()
-	if err != nil {
-		log.Fatalf("Failed to initialize card patterns: %v", err)
-	}
 
 	// ============================================================
 	// STEP 4: Load configuration
