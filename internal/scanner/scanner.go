@@ -1,5 +1,10 @@
 // Package scanner handles file and directory scanning for credit cards
 // This package orchestrates the scanning process using detector and filter packages
+//
+// UPDATED v2.0:
+//   - Removed duplicate detection within files
+//   - Now reports ALL occurrences of cards
+//   - Each line with a card is reported separately
 package scanner
 
 import (
@@ -12,6 +17,10 @@ import (
 	"../detector"
 	"../filter"
 )
+
+// ============================================================
+// DATA STRUCTURES
+// ============================================================
 
 // Finding represents a single credit card finding
 // This struct holds all information about where and what was found
@@ -81,6 +90,10 @@ type basicScanner struct {
 	config *Config
 }
 
+// ============================================================
+// CONSTRUCTOR
+// ============================================================
+
 // NewScanner creates a new scanner with the given configuration
 //
 // Parameters:
@@ -113,8 +126,24 @@ func (s *basicScanner) GetConfig() *Config {
 	return s.config
 }
 
+// ============================================================
+// SCAN FILE FUNCTION (UPDATED - NO DUPLICATE DETECTION)
+// ============================================================
+
 // ScanFile scans a single file for credit cards
 // This reads the file line by line and detects cards using the detector package
+//
+// UPDATED v2.0:
+//   - Removed duplicate detection within file
+//   - Now reports ALL occurrences of cards
+//   - Each line with a card is reported separately
+//
+// Why this change:
+//
+//	✅ PCI DSS compliance requires identifying ALL locations
+//	✅ Users need to know which lines to clean (not just first occurrence)
+//	✅ Risk assessment: More occurrences = higher risk
+//	✅ Audit trail: Complete report of all exposures
 //
 // Parameters:
 //   - filePath: Full path to the file to scan
@@ -137,41 +166,64 @@ func (s *basicScanner) GetConfig() *Config {
 //	        finding.LineNumber, finding.CardType, finding.MaskedCard)
 //	}
 func (s *basicScanner) ScanFile(filePath string) ([]Finding, error) {
-	// Open the file for reading
+	// ============================================================
+	// STEP 1: Open the file
+	// ============================================================
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer file.Close()
 
-	// Use buffered scanner for efficient line-by-line reading
+	// ============================================================
+	// STEP 2: Create buffered scanner for line-by-line reading
+	// ============================================================
+	// Use buffered scanner for efficient reading
 	// This is memory-efficient as it doesn't load entire file into memory
-	scanner := bufio.NewScanner(file)
+	// Each line is processed individually
+	fileScanner := bufio.NewScanner(file)
 
+	// Initialize results slice
 	var findings []Finding
 	lineNumber := 0
 
-	// Track cards we've already seen in this file to avoid duplicates
-	// Some files might have the same card number on multiple lines
-	seenCards := make(map[string]bool)
+	// ============================================================
+	// IMPORTANT CHANGE: Duplicate detection REMOVED
+	// ============================================================
+	// Old behavior (v1.0):
+	//   seenCards := make(map[string]bool)
+	//   if seenCards[cardNumber] { continue }
+	//
+	// Why removed:
+	//   - If same card appeared on lines 10, 20, 30:
+	//     Old: Only line 10 reported
+	//     New: All three lines reported
+	//   - Users need to see ALL locations for proper cleanup
+	//   - Risk scoring: Multiple occurrences = higher risk
 
-	// Read file line by line
-	for scanner.Scan() {
+	// ============================================================
+	// STEP 3: Read file line by line
+	// ============================================================
+	for fileScanner.Scan() {
 		lineNumber++
-		line := scanner.Text()
+		line := fileScanner.Text()
 
 		// Use detector package to find cards in this line
+		// This uses the NEW pipeline detection:
+		//   1. Fast regex for card-like patterns
+		//   2. Issuer matching (prefix checking)
+		//   3. Luhn validation (final check)
 		cardsInLine := detector.FindCardsInText(line)
 
-		// Process each card found
+		// ============================================================
+		// STEP 4: Process each card found on this line
+		// ============================================================
 		for cardNumber, cardType := range cardsInLine {
-			// Skip if we've already recorded this card in this file
-			if seenCards[cardNumber] {
-				continue
-			}
-			seenCards[cardNumber] = true
+			// ✅ NO DUPLICATE CHECK
+			// Every occurrence is reported, even if we've seen
+			// this card number before in the file
 
-			// Create a finding record
+			// Create a finding record with all details
 			finding := Finding{
 				FilePath:   filePath,
 				LineNumber: lineNumber,
@@ -181,17 +233,27 @@ func (s *basicScanner) ScanFile(filePath string) ([]Finding, error) {
 				Timestamp:  time.Now(),
 			}
 
+			// Add to results
 			findings = append(findings, finding)
 		}
 	}
 
-	// Check if scanner encountered any errors
-	if err := scanner.Err(); err != nil {
+	// ============================================================
+	// STEP 5: Check for scanner errors
+	// ============================================================
+	// Check if scanner encountered any errors during reading
+	// This could be due to encoding issues, permission problems, etc.
+	if err := fileScanner.Err(); err != nil {
+		// Return findings we got so far along with the error
 		return findings, fmt.Errorf("error reading file: %w", err)
 	}
 
 	return findings, nil
 }
+
+// ============================================================
+// SCAN DIRECTORY FUNCTION
+// ============================================================
 
 // ScanDirectory scans a directory recursively for credit cards
 // This uses filepath.Walk to traverse the directory tree
@@ -222,6 +284,10 @@ func (s *basicScanner) ScanDirectory(dirPath string) (*ScanResult, error) {
 	// Otherwise use single-threaded scanning
 	return s.scanDirectorySingleThreaded(dirPath)
 }
+
+// ============================================================
+// SINGLE-THREADED SCAN
+// ============================================================
 
 // scanDirectorySingleThreaded scans directory without concurrency
 // This is simpler and uses less CPU/memory
@@ -300,11 +366,15 @@ func (s *basicScanner) scanDirectorySingleThreaded(dirPath string) (*ScanResult,
 	return result, nil
 }
 
+// ============================================================
+// CONCURRENT SCAN
+// ============================================================
+
 // scanDirectoryConcurrent scans directory using multiple worker goroutines
 // This is faster but uses more CPU and memory
 func (s *basicScanner) scanDirectoryConcurrent(dirPath string) (*ScanResult, error) {
-	// This will be implemented in worker_pool.go
-	// For now, delegate to the WorkerPool
+	// Delegate to the WorkerPool implementation
+	// This is implemented in worker_pool.go
 	pool := NewWorkerPool(s.config.Workers, s.config)
 	return pool.ScanDirectory(dirPath)
 }
