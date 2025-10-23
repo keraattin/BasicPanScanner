@@ -1,16 +1,15 @@
 {
-  "_comment": "BasicPanScanner BIN Database v3.0",
+  "_comment": "BasicPanScanner BIN Database v3.1",
   "_info": {
-    "version": "3.0.0",
-    "last_updated": "2025-01-15",
+    "version": "3.1.0",
+    "last_updated": "2025-10-23",
     "description": "Comprehensive BIN (Bank Identification Number) database for accurate card detection",
     "sources": [
       "ISO/IEC 7812 Standard",
-      "Visa Developer Documentation",
-      "Mastercard BIN Range Documentation",
-      "Discover Global Network BIN Ranges",
-      "Payment Networks Official Documentation",
-      "Multiple BIN databases (binlist.io, bindb.com, bincodes.com)"
+      "Visa/Mastercard/Amex/Discover/JCB Official Documentation",
+      "Discover Global Network BIN Ranges:contentReference[oaicite:31]{index=31}",
+      "Domestic Network Docs (e.g. UnionPay, RuPay, Mir, etc.)",
+      "Multiple BIN databases (binlist.io, bindb.com, bincodes.com, VCCGenerator):contentReference[oaicite:32]{index=32}:contentReference[oaicite:33]{index=33}"
     ],
     "priority_rules": "When BIN ranges overlap, the order in this file determines priority"
   },
@@ -29,35 +28,34 @@
       "active": true,
       "notes": "Uses unique 4-6-5 digit grouping (XXXX XXXXXX XXXXX)"
     },
-    
     {
       "issuer": "Diners",
       "display_name": "Diners Club",
       "ranges": [
         {"start": "300000", "end": "305999"},
+        {"start": "309500", "end": "309599"},
         {"start": "360000", "end": "369999"},
-        {"start": "380000", "end": "389999"}
+        {"start": "380000", "end": "389999"},
+        {"start": "390000", "end": "399999"}
       ],
       "lengths": [14, 16],
       "priority": 95,
       "region": "Global",
       "active": true,
-      "notes": "Legacy 14-digit format, transitioning to 16-digit. Some 16-digit cards processed as Mastercard (54-55 range)"
+      "notes": "Legacy 14-digit format, transitioning to 16-digit. 39xxxx included:contentReference[oaicite:34]{index=34}. Some 16-digit cards processed as Mastercard (54-55 range in US/CA)."
     },
-    
     {
       "issuer": "JCB",
       "display_name": "Japan Credit Bureau",
       "ranges": [
         {"start": "352800", "end": "358999"}
       ],
-      "lengths": [16],
+      "lengths": [16, 19],
       "priority": 90,
       "region": "Asia-Pacific",
       "active": true,
-      "notes": "Popular in Japan and Asia. STRICT: Only 3528-3589, not all 35xx"
+      "notes": "Popular in Japan and Asia. STRICT: Only 3528-3589:contentReference[oaicite:35]{index=35} (JCB’s primary range). Co-branded cards (e.g. 353, 356 with RuPay) also fall in this range."
     },
-    
     {
       "issuer": "Elo",
       "display_name": "Elo (Brazil)",
@@ -89,7 +87,6 @@
       "active": true,
       "notes": "Brazilian domestic network. Part of Discover Global Network since 2016"
     },
-    
     {
       "issuer": "Troy",
       "display_name": "Troy (Turkey)",
@@ -100,69 +97,84 @@
       "priority": 80,
       "region": "Turkey",
       "active": true,
-      "notes": "Turkish domestic network. Very specific range, low false positive risk"
+      "notes": "Turkish domestic network. Specific BIN range. Some Troy cards co-badged with Discover (65xxxx):contentReference[oaicite:36]{index=36}"
     },
-    
     {
       "issuer": "Mir",
       "display_name": "Mir (Russia)",
       "ranges": [
         {"start": "220000", "end": "220499"}
       ],
-      "lengths": [16],
+      "lengths": [16, 19],
       "priority": 75,
       "region": "Russia",
       "active": true,
-      "notes": "Russian National Payment System. Gained dominance after 2014"
+      "notes": "Russian National Payment System. Gained dominance after 2014. Conflicts with MasterCard 22xx range, so Mir is prioritized:contentReference[oaicite:37]{index=37}."
     },
-    
-    {
-      "issuer": "Discover",
-      "display_name": "Discover",
-      "ranges": [
-        {"start": "601100", "end": "601199"},
-        {"start": "622126", "end": "622925"},
-        {"start": "644000", "end": "649999"},
-        {"start": "650000", "end": "659999"}
-      ],
-      "lengths": [16],
-      "priority": 70,
-      "region": "Global",
-      "active": true,
-      "notes": "Four IIN ranges. 622126-622925 are dual-branded with UnionPay. Check this BEFORE UnionPay to avoid misdetection"
-    },
-    
     {
       "issuer": "RuPay",
       "display_name": "RuPay (India)",
       "ranges": [
         {"start": "600000", "end": "609999"},
         {"start": "652100", "end": "652999"},
-        {"start": "817900", "end": "818999"}
+        {"start": "817900", "end": "818999"},
+        {"start": "508000", "end": "508999"},
+        {"start": "820000", "end": "821999"}
       ],
       "lengths": [16, 17, 18, 19],
-      "priority": 65,
+      "priority": 74,
       "region": "India",
       "active": true,
-      "notes": "Indian domestic network. Supports 13-19 digits officially. Check this BEFORE generic Visa 6xxx to avoid misdetection"
+      "notes": "Indian domestic network. Primary IINs start with 60, 65, 81, 82, 508:contentReference[oaicite:38]{index=38}. (353, 356 are JCB co-branded). Placed above Discover to catch 652xxx BINs."
     },
-    
+    {
+      "issuer": "Verve",
+      "display_name": "Verve (Nigeria)",
+      "ranges": [
+        {"start": "506099", "end": "506198"},
+        {"start": "507865", "end": "507964"},
+        {"start": "650002", "end": "650027"}
+      ],
+      "lengths": [16, 18, 19],
+      "priority": 72,
+      "region": "Nigeria",
+      "active": true,
+      "notes": "Nigerian domestic network (Interswitch). Part of Discover Global Network. New 507865-507964 range added:contentReference[oaicite:39]{index=39}."
+    },
+    {
+      "issuer": "Discover",
+      "display_name": "Discover",
+      "ranges": [
+        {"start": "601100", "end": "601199"},
+        {"start": "622126", "end": "622925"},
+        {"start": "624000", "end": "626999"},
+        {"start": "628200", "end": "628899"},
+        {"start": "644000", "end": "649999"},
+        {"start": "650000", "end": "659999"}
+      ],
+      "lengths": [16, 19],
+      "priority": 70,
+      "region": "Global",
+      "active": true,
+      "notes": "Discover & Diners Club International network. Added 624000-626999, 628200-628899 ranges per latest Discover Global Network updates:contentReference[oaicite:40]{index=40}. 622126-622925 are UnionPay co-branded."
+    },
     {
       "issuer": "UnionPay",
       "display_name": "China UnionPay",
       "ranges": [
         {"start": "620000", "end": "621999"},
-        {"start": "623000", "end": "625999"},
+        {"start": "622000", "end": "622125"},
+        {"start": "622926", "end": "622999"},
+        {"start": "623000", "end": "623999"},
         {"start": "628200", "end": "628899"},
         {"start": "810000", "end": "817199"}
       ],
       "lengths": [16, 17, 18, 19],
       "priority": 60,
-      "region": "China",
+      "region": "China/Global",
       "active": true,
-      "notes": "Largest card network in Asia (3.1B cards). EXCLUDE 622126-622925 (Discover overlap). Some cards don't use Luhn validation"
+      "notes": "Largest card network in Asia (over 9 billion cards). New BIN range 810000-817199 added in 2019:contentReference[oaicite:41]{index=41}. 622126-622925 allocated to Discover partnership. Some UnionPay cards (especially 8xx series) may not use Luhn."
     },
-    
     {
       "issuer": "MasterCard",
       "display_name": "Mastercard",
@@ -174,9 +186,47 @@
       "priority": 50,
       "region": "Global",
       "active": true,
-      "notes": "Two ranges: Legacy (51-55) and New (2221-2720 since 2014). Check Mir first to avoid 22xx conflict"
+      "notes": "Two main ranges: Classic (51-55) and Extended (2221-2720 since 2017). Check Mir first to avoid 22xx conflict."
     },
-    
+    {
+      "issuer": "Maestro",
+      "display_name": "Maestro (Debit)",
+      "ranges": [
+        {"start": "501800", "end": "501899"},
+        {"start": "502000", "end": "502099"},
+        {"start": "503800", "end": "503899"},
+        {"start": "589300", "end": "589399"},
+        {"start": "630400", "end": "630499"},
+        {"start": "675900", "end": "675999"},
+        {"start": "676100", "end": "676199"},
+        {"start": "676200", "end": "676299"},
+        {"start": "676300", "end": "676399"},
+        {"start": "676770", "end": "676770"},
+        {"start": "676774", "end": "676774"}
+      ],
+      "lengths": [12, 13, 14, 15, 16, 17, 18, 19],
+      "priority": 45,
+      "region": "Global",
+      "active": true,
+      "notes": "Mastercard’s global debit network:contentReference[oaicite:42]{index=42}. Includes UK Maestro BINs 6759, 676770, 676774:contentReference[oaicite:43]{index=43}. Variable length PAN (up to 19 digits)."
+    },
+    {
+      "issuer": "Visa Electron",
+      "display_name": "Visa Electron",
+      "ranges": [
+        {"start": "402600", "end": "402699"},
+        {"start": "417500", "end": "417500"},
+        {"start": "450800", "end": "450899"},
+        {"start": "484400", "end": "484499"},
+        {"start": "491300", "end": "491399"},
+        {"start": "491700", "end": "491799"}
+      ],
+      "lengths": [16],
+      "priority": 42,
+      "region": "Global",
+      "active": true,
+      "notes": "Visa’s debit card subset:contentReference[oaicite:44]{index=44}. Specific BIN prefixes, all 16-digit. Obsolete in some regions but still active in others."
+    },
     {
       "issuer": "Visa",
       "display_name": "Visa",
@@ -187,23 +237,8 @@
       "priority": 40,
       "region": "Global",
       "active": true,
-      "notes": "Most common card type (60% globally). 13-digit cards obsolete since 2005. Check Elo/RuPay first to avoid false positives"
+      "notes": "Most common card type (~60% globally). 13-digit classic Visa deprecated since 2005:contentReference[oaicite:45]{index=45}. Check Elo/RuPay first to avoid false positives in 4xxxx range."
     },
-    
-    {
-      "issuer": "Verve",
-      "display_name": "Verve (Nigeria)",
-      "ranges": [
-        {"start": "506099", "end": "506198"},
-        {"start": "650000", "end": "506499"}
-      ],
-      "lengths": [16, 19],
-      "priority": 35,
-      "region": "Nigeria",
-      "active": true,
-      "notes": "Nigerian domestic network. Part of Discover Global Network"
-    },
-    
     {
       "issuer": "BCCard",
       "display_name": "BC Card (South Korea)",
@@ -214,14 +249,222 @@
       "priority": 30,
       "region": "South Korea",
       "active": true,
-      "notes": "Korean domestic network. Multiple issuing banks"
+      "notes": "Korean domestic network. Many cards now co-branded with Master/Visa; BCCard range still used for some local-only cards."
+    },
+    {
+      "issuer": "Dankort",
+      "display_name": "Dankort (Denmark)",
+      "ranges": [
+        {"start": "501900", "end": "501999"},
+        {"start": "457100", "end": "457199"}
+      ],
+      "lengths": [16],
+      "priority": 25,
+      "region": "Denmark",
+      "active": true,
+      "notes": "Danish domestic card. 5019 is pure Dankort:contentReference[oaicite:46]{index=46}; 4571xxxx are co-branded Visa/Dankort:contentReference[oaicite:47]{index=47} (identified here for completeness)."
+    },
+    {
+      "issuer": "UATP",
+      "display_name": "UATP (Airline)",
+      "ranges": [
+        {"start": "100000", "end": "199999"}
+      ],
+      "lengths": [15],
+      "priority": 25,
+      "region": "Global",
+      "active": true,
+      "notes": "Universal Air Travel Plan – airline-issued charge cards (e.g. cards starting with 1):contentReference[oaicite:48]{index=48}. Used for corporate travel payments."
+    },
+    {
+      "issuer": "Uzcard",
+      "display_name": "Uzcard (Uzbekistan)",
+      "ranges": [
+        {"start": "860000", "end": "860999"},
+        {"start": "561400", "end": "561499"}
+      ],
+      "lengths": [16],
+      "priority": 25,
+      "region": "Uzbekistan",
+      "active": true,
+      "notes": "Uzbekistan’s first national payment card:contentReference[oaicite:49]{index=49}. Often co-badged with international networks for use abroad."
+    },
+    {
+      "issuer": "Humo",
+      "display_name": "Humo (Uzbekistan)",
+      "ranges": [
+        {"start": "986000", "end": "986099"}
+      ],
+      "lengths": [16],
+      "priority": 25,
+      "region": "Uzbekistan",
+      "active": true,
+      "notes": "Uzbekistan’s newer payment network (launched 2019). 9860 BIN prefix:contentReference[oaicite:50]{index=50}."
+    },
+    {
+      "issuer": "LankaPay",
+      "display_name": "LankaPay (Sri Lanka)",
+      "ranges": [
+        {"start": "357111", "end": "357111"}
+      ],
+      "lengths": [16],
+      "priority": 25,
+      "region": "Sri Lanka",
+      "active": true,
+      "notes": "Sri Lankan domestic card scheme (also branded as 'LankaPay JCB' on some cards). BIN 357111:contentReference[oaicite:51]{index=51}."
+    },
+    {
+      "issuer": "PayPak",
+      "display_name": "PayPak (Pakistan)",
+      "ranges": [
+        {"start": "220500", "end": "220599"}
+      ],
+      "lengths": [16],
+      "priority": 25,
+      "region": "Pakistan",
+      "active": true,
+      "notes": "Pakistan’s national debit card scheme:contentReference[oaicite:52]{index=52}, launched 2016. Shares first four digits (2205) with BORICA (Bulgaria), but listed separately."
+    },
+    {
+      "issuer": "Meeza",
+      "display_name": "Meeza (Egypt)",
+      "ranges": [
+        {"start": "507800", "end": "507864"},
+        {"start": "507965", "end": "507999"}
+      ],
+      "lengths": [16],
+      "priority": 25,
+      "region": "Egypt",
+      "active": true,
+      "notes": "Egyptian domestic payment network:contentReference[oaicite:53]{index=53} (launched 2019). Uses BINs in 5078 series. (507865-507964 reserved for Verve overlap)."
+    },
+    {
+      "issuer": "UkrCard",
+      "display_name": "UkrCard (Ukraine)",
+      "ranges": [
+        {"start": "604001", "end": "604199"}
+      ],
+      "lengths": [16],
+      "priority": 20,
+      "region": "Ukraine",
+      "active": true,
+      "notes": "Ukrainian domestic card scheme (sometimes branded as 'Prostir'). Uses BINs 6040-6041:contentReference[oaicite:54]{index=54}."
+    },
+    {
+      "issuer": "BelCart",
+      "display_name": "BelCart (Belarus)",
+      "ranges": [
+        {"start": "911200", "end": "911299"}
+      ],
+      "lengths": [16],
+      "priority": 20,
+      "region": "Belarus",
+      "active": true,
+      "notes": "Belarusian domestic card network. BIN prefix 9112:contentReference[oaicite:55]{index=55}."
+    },
+    {
+      "issuer": "NSMEP",
+      "display_name": "NSMEP (Ukraine)",
+      "ranges": [
+        {"start": "980400", "end": "980499"}
+      ],
+      "lengths": [16],
+      "priority": 20,
+      "region": "Ukraine",
+      "active": true,
+      "notes": "Ukraine’s former National System of Mass Electronic Payments:contentReference[oaicite:56]{index=56} (now largely replaced by Prostir). BIN 9804."
+    },
+    {
+      "issuer": "ArCa",
+      "display_name": "ArCa (Armenia)",
+      "ranges": [
+        {"start": "905100", "end": "905199"}
+      ],
+      "lengths": [16],
+      "priority": 20,
+      "region": "Armenia",
+      "active": true,
+      "notes": "Armenian Card payment system. BIN prefix 9051:contentReference[oaicite:57]{index=57}."
+    },
+    {
+      "issuer": "Elcart",
+      "display_name": "Elcart (Kyrgyzstan)",
+      "ranges": [
+        {"start": "941700", "end": "941799"}
+      ],
+      "lengths": [16],
+      "priority": 20,
+      "region": "Kyrgyzstan",
+      "active": true,
+      "notes": "Kyrgyzstan’s domestic card scheme. BIN prefix 9417:contentReference[oaicite:58]{index=58}."
+    },
+    {
+      "issuer": "Cabal",
+      "display_name": "Cabal (Argentina)",
+      "ranges": [
+        {"start": "604200", "end": "604299"}
+      ],
+      "lengths": [16],
+      "priority": 20,
+      "region": "Argentina",
+      "active": true,
+      "notes": "Argentine domestic card network:contentReference[oaicite:59]{index=59}. Uses BINs starting 6042."
+    },
+    {
+      "issuer": "Forbrugsforeningen",
+      "display_name": "Forbrugsforeningen (Denmark)",
+      "ranges": [
+        {"start": "600722", "end": "600722"}
+      ],
+      "lengths": [16],
+      "priority": 15,
+      "region": "Denmark",
+      "active": true,
+      "notes": "Private loyalty/credit card for a Danish consumers’ association. BIN 600722:contentReference[oaicite:60]{index=60}."
+    },
+    {
+      "issuer": "EFTPOS",
+      "display_name": "EFTPOS (Australia)",
+      "ranges": [
+        {"start": "560200", "end": "560299"},
+        {"start": "579900", "end": "579999"}
+      ],
+      "lengths": [15, 16],
+      "priority": 15,
+      "region": "Australia",
+      "active": true,
+      "notes": "Australian domestic debit network:contentReference[oaicite:61]{index=61}. Most cards co-branded with Visa/Mastercard, but some EFTPOS-only cards use 5602 or 5799 prefixes. May be 15 or 16 digits."
+    },
+    {
+      "issuer": "EBT",
+      "display_name": "EBT (USA)",
+      "ranges": [
+        {"start": "507600", "end": "507699"}
+      ],
+      "lengths": [16],
+      "priority": 15,
+      "region": "USA",
+      "active": true,
+      "notes": "Electronic Benefits Transfer cards for government assistance programs:contentReference[oaicite:62]{index=62}. Treated as debit cards, BIN prefix 5076."
+    },
+    {
+      "issuer": "NPS Pridnestrovie",
+      "display_name": "NPS Pridnestrovie",
+      "ranges": [
+        {"start": "605474", "end": "605474"}
+      ],
+      "lengths": [16],
+      "priority": 10,
+      "region": "Transnistria",
+      "active": false,
+      "notes": "Transnistria’s local card (not widely used):contentReference[oaicite:63]{index=63}. Included for completeness."
     }
   ],
   
   "_validation_notes": {
-    "overlap_handling": "BIN ranges are ordered by priority. Higher priority matches are checked first",
-    "length_validation": "Always validate card length matches issuer's supported lengths",
-    "luhn_validation": "All cards except some UnionPay use Luhn algorithm",
-    "false_positives": "6-digit BIN validation significantly reduces false positives vs 2-4 digit prefix checking"
+    "overlap_handling": "BIN ranges are ordered by priority. Higher priority matches are checked first.",
+    "length_validation": "Always validate that the card number length matches the issuer’s supported lengths.",
+    "luhn_validation": "All cards (except some UnionPay and certain transit cards) use Luhn algorithm for the check digit.",
+    "false_positives": "6-digit BIN matching significantly reduces false positives vs. 2-4 digit prefix checking."
   }
 }
