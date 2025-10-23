@@ -1,7 +1,7 @@
 {
   "_comment": "BasicPanScanner BIN Database v3.1",
   "_info": {
-    "version": "3.1.0",
+    "version": "3.1.3",
     "last_updated": "2025-10-23",
     "description": "Comprehensive BIN (Bank Identification Number) database for accurate card detection",
     "sources": [
@@ -13,16 +13,23 @@
     ],
     "priority_rules": "When BIN ranges overlap, the order in this file determines priority"
   },
-  
   "bin_ranges": [
     {
       "issuer": "Amex",
       "display_name": "American Express",
       "ranges": [
-        {"start": "340000", "end": "349999"},
-        {"start": "370000", "end": "379999"}
+        {
+          "start": "340000",
+          "end": "349999"
+        },
+        {
+          "start": "370000",
+          "end": "379999"
+        }
       ],
-      "lengths": [15],
+      "lengths": [
+        15
+      ],
       "priority": 100,
       "region": "Global",
       "active": true,
@@ -32,13 +39,31 @@
       "issuer": "Diners",
       "display_name": "Diners Club",
       "ranges": [
-        {"start": "300000", "end": "305999"},
-        {"start": "309500", "end": "309599"},
-        {"start": "360000", "end": "369999"},
-        {"start": "380000", "end": "389999"},
-        {"start": "390000", "end": "399999"}
+        {
+          "start": "300000",
+          "end": "305999"
+        },
+        {
+          "start": "309500",
+          "end": "309599"
+        },
+        {
+          "start": "360000",
+          "end": "369999"
+        },
+        {
+          "start": "380000",
+          "end": "389999"
+        },
+        {
+          "start": "390000",
+          "end": "399999"
+        }
       ],
-      "lengths": [14, 16],
+      "lengths": [
+        14,
+        16
+      ],
       "priority": 95,
       "region": "Global",
       "active": true,
@@ -48,9 +73,15 @@
       "issuer": "JCB",
       "display_name": "Japan Credit Bureau",
       "ranges": [
-        {"start": "352800", "end": "358999"}
+        {
+          "start": "352800",
+          "end": "358999"
+        }
       ],
-      "lengths": [16, 19],
+      "lengths": [
+        16,
+        19
+      ],
       "priority": 90,
       "region": "Asia-Pacific",
       "active": true,
@@ -60,28 +91,90 @@
       "issuer": "Elo",
       "display_name": "Elo (Brazil)",
       "ranges": [
-        {"start": "401178", "end": "401179"},
-        {"start": "438935", "end": "438935"},
-        {"start": "451416", "end": "451416"},
-        {"start": "457631", "end": "457632"},
-        {"start": "504175", "end": "504175"},
-        {"start": "506699", "end": "506778"},
-        {"start": "509000", "end": "509999"},
-        {"start": "636297", "end": "636297"},
-        {"start": "636368", "end": "636368"},
-        {"start": "650031", "end": "650033"},
-        {"start": "650035", "end": "650051"},
-        {"start": "650405", "end": "650439"},
-        {"start": "650485", "end": "650538"},
-        {"start": "650541", "end": "650598"},
-        {"start": "650700", "end": "650718"},
-        {"start": "650720", "end": "650727"},
-        {"start": "650901", "end": "650920"},
-        {"start": "651652", "end": "651679"},
-        {"start": "655000", "end": "655019"},
-        {"start": "655021", "end": "655058"}
+        {
+          "start": "401178",
+          "end": "401179"
+        },
+        {
+          "start": "438935",
+          "end": "438935"
+        },
+        {
+          "start": "451416",
+          "end": "451416"
+        },
+        {
+          "start": "457631",
+          "end": "457632"
+        },
+        {
+          "start": "504175",
+          "end": "504175"
+        },
+        {
+          "start": "506699",
+          "end": "506778"
+        },
+        {
+          "start": "509000",
+          "end": "509999"
+        },
+        {
+          "start": "636297",
+          "end": "636297"
+        },
+        {
+          "start": "636368",
+          "end": "636368"
+        },
+        {
+          "start": "650031",
+          "end": "650033"
+        },
+        {
+          "start": "650035",
+          "end": "650051"
+        },
+        {
+          "start": "650405",
+          "end": "650439"
+        },
+        {
+          "start": "650485",
+          "end": "650538"
+        },
+        {
+          "start": "650541",
+          "end": "650598"
+        },
+        {
+          "start": "650700",
+          "end": "650718"
+        },
+        {
+          "start": "650720",
+          "end": "650727"
+        },
+        {
+          "start": "650901",
+          "end": "650920"
+        },
+        {
+          "start": "651652",
+          "end": "651679"
+        },
+        {
+          "start": "655000",
+          "end": "655019"
+        },
+        {
+          "start": "655021",
+          "end": "655058"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 85,
       "region": "Brazil",
       "active": true,
@@ -91,9 +184,14 @@
       "issuer": "Troy",
       "display_name": "Troy (Turkey)",
       "ranges": [
-        {"start": "979200", "end": "979289"}
+        {
+          "start": "979200",
+          "end": "979289"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 80,
       "region": "Turkey",
       "active": true,
@@ -103,9 +201,15 @@
       "issuer": "Mir",
       "display_name": "Mir (Russia)",
       "ranges": [
-        {"start": "220000", "end": "220499"}
+        {
+          "start": "220000",
+          "end": "220499"
+        }
       ],
-      "lengths": [16, 19],
+      "lengths": [
+        16,
+        19
+      ],
       "priority": 75,
       "region": "Russia",
       "active": true,
@@ -115,13 +219,33 @@
       "issuer": "RuPay",
       "display_name": "RuPay (India)",
       "ranges": [
-        {"start": "600000", "end": "609999"},
-        {"start": "652100", "end": "652999"},
-        {"start": "817900", "end": "818999"},
-        {"start": "508000", "end": "508999"},
-        {"start": "820000", "end": "821999"}
+        {
+          "start": "600000",
+          "end": "609999"
+        },
+        {
+          "start": "652100",
+          "end": "652999"
+        },
+        {
+          "start": "817900",
+          "end": "818999"
+        },
+        {
+          "start": "508000",
+          "end": "508999"
+        },
+        {
+          "start": "820000",
+          "end": "821999"
+        }
       ],
-      "lengths": [16, 17, 18, 19],
+      "lengths": [
+        16,
+        17,
+        18,
+        19
+      ],
       "priority": 74,
       "region": "India",
       "active": true,
@@ -131,11 +255,24 @@
       "issuer": "Verve",
       "display_name": "Verve (Nigeria)",
       "ranges": [
-        {"start": "506099", "end": "506198"},
-        {"start": "507865", "end": "507964"},
-        {"start": "650002", "end": "650027"}
+        {
+          "start": "506099",
+          "end": "506198"
+        },
+        {
+          "start": "507865",
+          "end": "507964"
+        },
+        {
+          "start": "650002",
+          "end": "650027"
+        }
       ],
-      "lengths": [16, 18, 19],
+      "lengths": [
+        16,
+        18,
+        19
+      ],
       "priority": 72,
       "region": "Nigeria",
       "active": true,
@@ -145,15 +282,36 @@
       "issuer": "Discover",
       "display_name": "Discover",
       "ranges": [
-        {"start": "601100", "end": "601199"},
-        {"start": "622126", "end": "622925"},
-        {"start": "624000", "end": "626999"},
-        {"start": "628200", "end": "628899"},
-        {"start": "644000", "end": "649999"},
-        {"start": "650000", "end": "659999"}
+        {
+          "start": "601100",
+          "end": "601199"
+        },
+        {
+          "start": "622126",
+          "end": "622925"
+        },
+        {
+          "start": "624000",
+          "end": "626999"
+        },
+        {
+          "start": "628200",
+          "end": "628899"
+        },
+        {
+          "start": "644000",
+          "end": "649999"
+        },
+        {
+          "start": "650000",
+          "end": "659999"
+        }
       ],
-      "lengths": [16, 19],
-      "priority": 70,
+      "lengths": [
+        16,
+        19
+      ],
+      "priority": 76,
       "region": "Global",
       "active": true,
       "notes": "Discover & Diners Club International network. Added 624000-626999, 628200-628899 ranges per latest Discover Global Network updates:contentReference[oaicite:40]{index=40}. 622126-622925 are UnionPay co-branded."
@@ -162,14 +320,37 @@
       "issuer": "UnionPay",
       "display_name": "China UnionPay",
       "ranges": [
-        {"start": "620000", "end": "621999"},
-        {"start": "622000", "end": "622125"},
-        {"start": "622926", "end": "622999"},
-        {"start": "623000", "end": "623999"},
-        {"start": "628200", "end": "628899"},
-        {"start": "810000", "end": "817199"}
+        {
+          "start": "620000",
+          "end": "621999"
+        },
+        {
+          "start": "622000",
+          "end": "622125"
+        },
+        {
+          "start": "622926",
+          "end": "622999"
+        },
+        {
+          "start": "623000",
+          "end": "623999"
+        },
+        {
+          "start": "628200",
+          "end": "628899"
+        },
+        {
+          "start": "810000",
+          "end": "817199"
+        }
       ],
-      "lengths": [16, 17, 18, 19],
+      "lengths": [
+        16,
+        17,
+        18,
+        19
+      ],
       "priority": 60,
       "region": "China/Global",
       "active": true,
@@ -179,10 +360,18 @@
       "issuer": "MasterCard",
       "display_name": "Mastercard",
       "ranges": [
-        {"start": "510000", "end": "559999"},
-        {"start": "222100", "end": "272099"}
+        {
+          "start": "510000",
+          "end": "559999"
+        },
+        {
+          "start": "222100",
+          "end": "272099"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 50,
       "region": "Global",
       "active": true,
@@ -192,19 +381,61 @@
       "issuer": "Maestro",
       "display_name": "Maestro (Debit)",
       "ranges": [
-        {"start": "501800", "end": "501899"},
-        {"start": "502000", "end": "502099"},
-        {"start": "503800", "end": "503899"},
-        {"start": "589300", "end": "589399"},
-        {"start": "630400", "end": "630499"},
-        {"start": "675900", "end": "675999"},
-        {"start": "676100", "end": "676199"},
-        {"start": "676200", "end": "676299"},
-        {"start": "676300", "end": "676399"},
-        {"start": "676770", "end": "676770"},
-        {"start": "676774", "end": "676774"}
+        {
+          "start": "501800",
+          "end": "501899"
+        },
+        {
+          "start": "502000",
+          "end": "502099"
+        },
+        {
+          "start": "503800",
+          "end": "503899"
+        },
+        {
+          "start": "589300",
+          "end": "589399"
+        },
+        {
+          "start": "630400",
+          "end": "630499"
+        },
+        {
+          "start": "675900",
+          "end": "675999"
+        },
+        {
+          "start": "676100",
+          "end": "676199"
+        },
+        {
+          "start": "676200",
+          "end": "676299"
+        },
+        {
+          "start": "676300",
+          "end": "676399"
+        },
+        {
+          "start": "676770",
+          "end": "676770"
+        },
+        {
+          "start": "676774",
+          "end": "676774"
+        }
       ],
-      "lengths": [12, 13, 14, 15, 16, 17, 18, 19],
+      "lengths": [
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
       "priority": 45,
       "region": "Global",
       "active": true,
@@ -214,14 +445,34 @@
       "issuer": "Visa Electron",
       "display_name": "Visa Electron",
       "ranges": [
-        {"start": "402600", "end": "402699"},
-        {"start": "417500", "end": "417500"},
-        {"start": "450800", "end": "450899"},
-        {"start": "484400", "end": "484499"},
-        {"start": "491300", "end": "491399"},
-        {"start": "491700", "end": "491799"}
+        {
+          "start": "402600",
+          "end": "402699"
+        },
+        {
+          "start": "417500",
+          "end": "417500"
+        },
+        {
+          "start": "450800",
+          "end": "450899"
+        },
+        {
+          "start": "484400",
+          "end": "484499"
+        },
+        {
+          "start": "491300",
+          "end": "491399"
+        },
+        {
+          "start": "491700",
+          "end": "491799"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 42,
       "region": "Global",
       "active": true,
@@ -231,9 +482,15 @@
       "issuer": "Visa",
       "display_name": "Visa",
       "ranges": [
-        {"start": "400000", "end": "499999"}
+        {
+          "start": "400000",
+          "end": "499999"
+        }
       ],
-      "lengths": [16, 19],
+      "lengths": [
+        16,
+        19
+      ],
       "priority": 40,
       "region": "Global",
       "active": true,
@@ -243,10 +500,15 @@
       "issuer": "BCCard",
       "display_name": "BC Card (South Korea)",
       "ranges": [
-        {"start": "538800", "end": "538899"}
+        {
+          "start": "538800",
+          "end": "538899"
+        }
       ],
-      "lengths": [16],
-      "priority": 30,
+      "lengths": [
+        16
+      ],
+      "priority": 51,
       "region": "South Korea",
       "active": true,
       "notes": "Korean domestic network. Many cards now co-branded with Master/Visa; BCCard range still used for some local-only cards."
@@ -255,10 +517,18 @@
       "issuer": "Dankort",
       "display_name": "Dankort (Denmark)",
       "ranges": [
-        {"start": "501900", "end": "501999"},
-        {"start": "457100", "end": "457199"}
+        {
+          "start": "501900",
+          "end": "501999"
+        },
+        {
+          "start": "457100",
+          "end": "457199"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 25,
       "region": "Denmark",
       "active": true,
@@ -268,9 +538,14 @@
       "issuer": "UATP",
       "display_name": "UATP (Airline)",
       "ranges": [
-        {"start": "100000", "end": "199999"}
+        {
+          "start": "100000",
+          "end": "199999"
+        }
       ],
-      "lengths": [15],
+      "lengths": [
+        15
+      ],
       "priority": 25,
       "region": "Global",
       "active": true,
@@ -280,10 +555,18 @@
       "issuer": "Uzcard",
       "display_name": "Uzcard (Uzbekistan)",
       "ranges": [
-        {"start": "860000", "end": "860999"},
-        {"start": "561400", "end": "561499"}
+        {
+          "start": "860000",
+          "end": "860999"
+        },
+        {
+          "start": "561400",
+          "end": "561499"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 25,
       "region": "Uzbekistan",
       "active": true,
@@ -293,9 +576,14 @@
       "issuer": "Humo",
       "display_name": "Humo (Uzbekistan)",
       "ranges": [
-        {"start": "986000", "end": "986099"}
+        {
+          "start": "986000",
+          "end": "986099"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 25,
       "region": "Uzbekistan",
       "active": true,
@@ -305,10 +593,15 @@
       "issuer": "LankaPay",
       "display_name": "LankaPay (Sri Lanka)",
       "ranges": [
-        {"start": "357111", "end": "357111"}
+        {
+          "start": "357111",
+          "end": "357111"
+        }
       ],
-      "lengths": [16],
-      "priority": 25,
+      "lengths": [
+        16
+      ],
+      "priority": 91,
       "region": "Sri Lanka",
       "active": true,
       "notes": "Sri Lankan domestic card scheme (also branded as 'LankaPay JCB' on some cards). BIN 357111:contentReference[oaicite:51]{index=51}."
@@ -317,9 +610,14 @@
       "issuer": "PayPak",
       "display_name": "PayPak (Pakistan)",
       "ranges": [
-        {"start": "220500", "end": "220599"}
+        {
+          "start": "220500",
+          "end": "220599"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 25,
       "region": "Pakistan",
       "active": true,
@@ -329,10 +627,18 @@
       "issuer": "Meeza",
       "display_name": "Meeza (Egypt)",
       "ranges": [
-        {"start": "507800", "end": "507864"},
-        {"start": "507965", "end": "507999"}
+        {
+          "start": "507800",
+          "end": "507864"
+        },
+        {
+          "start": "507965",
+          "end": "507999"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 25,
       "region": "Egypt",
       "active": true,
@@ -342,10 +648,15 @@
       "issuer": "UkrCard",
       "display_name": "UkrCard (Ukraine)",
       "ranges": [
-        {"start": "604001", "end": "604199"}
+        {
+          "start": "604001",
+          "end": "604199"
+        }
       ],
-      "lengths": [16],
-      "priority": 20,
+      "lengths": [
+        16
+      ],
+      "priority": 76,
       "region": "Ukraine",
       "active": true,
       "notes": "Ukrainian domestic card scheme (sometimes branded as 'Prostir'). Uses BINs 6040-6041:contentReference[oaicite:54]{index=54}."
@@ -354,9 +665,14 @@
       "issuer": "BelCart",
       "display_name": "BelCart (Belarus)",
       "ranges": [
-        {"start": "911200", "end": "911299"}
+        {
+          "start": "911200",
+          "end": "911299"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 20,
       "region": "Belarus",
       "active": true,
@@ -366,9 +682,14 @@
       "issuer": "NSMEP",
       "display_name": "NSMEP (Ukraine)",
       "ranges": [
-        {"start": "980400", "end": "980499"}
+        {
+          "start": "980400",
+          "end": "980499"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 20,
       "region": "Ukraine",
       "active": true,
@@ -378,9 +699,14 @@
       "issuer": "ArCa",
       "display_name": "ArCa (Armenia)",
       "ranges": [
-        {"start": "905100", "end": "905199"}
+        {
+          "start": "905100",
+          "end": "905199"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 20,
       "region": "Armenia",
       "active": true,
@@ -390,9 +716,14 @@
       "issuer": "Elcart",
       "display_name": "Elcart (Kyrgyzstan)",
       "ranges": [
-        {"start": "941700", "end": "941799"}
+        {
+          "start": "941700",
+          "end": "941799"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 20,
       "region": "Kyrgyzstan",
       "active": true,
@@ -402,10 +733,15 @@
       "issuer": "Cabal",
       "display_name": "Cabal (Argentina)",
       "ranges": [
-        {"start": "604200", "end": "604299"}
+        {
+          "start": "604200",
+          "end": "604299"
+        }
       ],
-      "lengths": [16],
-      "priority": 20,
+      "lengths": [
+        16
+      ],
+      "priority": 76,
       "region": "Argentina",
       "active": true,
       "notes": "Argentine domestic card network:contentReference[oaicite:59]{index=59}. Uses BINs starting 6042."
@@ -414,10 +750,15 @@
       "issuer": "Forbrugsforeningen",
       "display_name": "Forbrugsforeningen (Denmark)",
       "ranges": [
-        {"start": "600722", "end": "600722"}
+        {
+          "start": "600722",
+          "end": "600722"
+        }
       ],
-      "lengths": [16],
-      "priority": 15,
+      "lengths": [
+        16
+      ],
+      "priority": 76,
       "region": "Denmark",
       "active": true,
       "notes": "Private loyalty/credit card for a Danish consumers’ association. BIN 600722:contentReference[oaicite:60]{index=60}."
@@ -426,10 +767,19 @@
       "issuer": "EFTPOS",
       "display_name": "EFTPOS (Australia)",
       "ranges": [
-        {"start": "560200", "end": "560299"},
-        {"start": "579900", "end": "579999"}
+        {
+          "start": "560200",
+          "end": "560299"
+        },
+        {
+          "start": "579900",
+          "end": "579999"
+        }
       ],
-      "lengths": [15, 16],
+      "lengths": [
+        15,
+        16
+      ],
       "priority": 15,
       "region": "Australia",
       "active": true,
@@ -439,9 +789,14 @@
       "issuer": "EBT",
       "display_name": "EBT (USA)",
       "ranges": [
-        {"start": "507600", "end": "507699"}
+        {
+          "start": "507600",
+          "end": "507699"
+        }
       ],
-      "lengths": [16],
+      "lengths": [
+        16
+      ],
       "priority": 15,
       "region": "USA",
       "active": true,
@@ -451,16 +806,20 @@
       "issuer": "NPS Pridnestrovie",
       "display_name": "NPS Pridnestrovie",
       "ranges": [
-        {"start": "605474", "end": "605474"}
+        {
+          "start": "605474",
+          "end": "605474"
+        }
       ],
-      "lengths": [16],
-      "priority": 10,
+      "lengths": [
+        16
+      ],
+      "priority": 76,
       "region": "Transnistria",
-      "active": false,
+      "active": true,
       "notes": "Transnistria’s local card (not widely used):contentReference[oaicite:63]{index=63}. Included for completeness."
     }
   ],
-  
   "_validation_notes": {
     "overlap_handling": "BIN ranges are ordered by priority. Higher priority matches are checked first.",
     "length_validation": "Always validate that the card number length matches the issuer’s supported lengths.",
