@@ -1,12 +1,18 @@
-// BasicPanScanner v3.0 - PCI Compliance Scanner
+// BasicPanScanner v3.1.1 - PCI Compliance Scanner
 // Main application entry point with BIN Database support
+//
 // INITIALIZATION ORDER:
-//   1. Parse CLI flags
-//   2. Show banner
-//   3. Load config
-//   4. ** INITIALIZE BIN DATABASE ** (NEW!)
-//   5. Create scanner
-//   6. Run scan
+//  1. Parse CLI flags
+//  2. Show banner
+//  3. Load configuration
+//  4. Initialize BIN database (CRITICAL)
+//  5. Create filters
+//  6. Create scanner
+//  7. Run scan
+//  8. Generate report
+//
+// Author: BasicPanScanner Contributors
+// License: MIT
 package main
 
 import (
@@ -17,162 +23,173 @@ import (
 	"strings"
 
 	"../../internal/config"
-	"../../internal/detector"  // ← Detector package for BIN DB
+	"../../internal/detector"
 	"../../internal/filter"
 	"../../internal/report"
 	"../../internal/scanner"
 	"../../internal/ui"
 )
 
-// Application version
+// Version is the application version
+// Update this for each release
 const Version = "3.0.0"
 
 func main() {
 	// ============================================================
 	// STEP 1: Parse command line flags
 	// ============================================================
+	// Define and parse CLI arguments
+	// All flags are optional except -path
 
-	pathFlag := flag.String("path", "", "Directory to scan")
-	outputFlag := flag.String("output", "", "Output file")
-	modeFlag := flag.String("mode", "", "Scan mode: 'whitelist' or 'blacklist' (overrides config)")
-	extensionsFlag := flag.String("ext", "", "Extensions (e.g., txt,log,csv)")
-	excludeFlag := flag.String("exclude", "", "Exclude dirs (e.g., .git,vendor)")
-	workersFlag := flag.Int("workers", 0, "Number of concurrent workers (default: CPU/2)")
-	helpFlag := flag.Bool("help", false, "Show help")
+	pathFlag := flag.String("path", "", "Directory or file to scan (required)")
+	outputFlag := flag.String("output", "", "Output file path (.json, .csv, .html, .txt, .xml)")
+	modeFlag := flag.String("mode", "", "Scan mode: 'whitelist' or 'blacklist' (overrides config.json)")
+	extensionsFlag := flag.String("ext", "", "File extensions to process (comma-separated, e.g., txt,log,csv)")
+	excludeFlag := flag.String("exclude", "", "Directories to exclude (comma-separated, e.g., .git,vendor)")
+	workersFlag := flag.Int("workers", 0, "Number of concurrent workers (default: CPU cores / 2)")
+	helpFlag := flag.Bool("help", false, "Show help information")
 
 	flag.Parse()
 
-	// Show help if requested or no arguments
+	// Show help if requested or no arguments provided
 	if *helpFlag || len(os.Args) == 1 {
 		ui.ShowHelp()
 		return
 	}
 
-	// Path is required
+	// Validate required path flag
 	if *pathFlag == "" {
-		fmt.Println("Error: -path is required")
-		fmt.Println("Use -help for usage information")
+		fmt.Fprintln(os.Stderr, "Error: -path flag is required")
+		fmt.Fprintln(os.Stderr, "Use -help for usage information")
 		os.Exit(1)
 	}
 
 	// ============================================================
-	// STEP 2: Display banner
+	// STEP 2: Display application banner
 	// ============================================================
 
 	ui.ShowBanner(Version)
 
 	// ============================================================
-	// STEP 3: Initialize BIN Database (NEW IN v3.0!)
+	// STEP 3: Initialize BIN Database (CRITICAL)
 	// ============================================================
-	// Bu adım MUTLAKA config yüklemeden ÖNCE yapılmalıdır
-	// Çünkü scanner BIN database'e ihtiyaç duyar
-	
+	// This must be done BEFORE loading config and creating scanner
+	// The scanner depends on the BIN database for card type detection
+
 	fmt.Println("Initializing BIN database...")
-	
-	// BIN database'i yükle
-	// Boş string = default path kullan (internal/detector/bindata/bin_ranges.json)
+
+	// Initialize the global BIN database
+	// Empty string means use default path: internal/detector/bindata/bin_ranges.json
 	err := detector.InitGlobalBINDatabase("")
 	if err != nil {
-		// CRITICAL ERROR: BIN database yüklenemedi
-		// Scanner çalışamaz, uygulamayı durdur
-		fmt.Printf("✗ CRITICAL ERROR: Failed to initialize BIN database\n")
-		fmt.Printf("  Error: %v\n", err)
-		fmt.Println()
-		fmt.Println("  This error means the BIN database file could not be loaded.")
-		fmt.Println("  The scanner cannot detect card types without this database.")
-		fmt.Println()
-		fmt.Println("  Possible solutions:")
-		fmt.Println("  1. Check if file exists: internal/detector/bindata/bin_ranges.json")
-		fmt.Println("  2. Verify file permissions (should be readable)")
-		fmt.Println("  3. Check JSON syntax (use a JSON validator)")
-		fmt.Println()
+		// CRITICAL ERROR: Cannot proceed without BIN database
+		fmt.Fprintf(os.Stderr, "\n✗ CRITICAL ERROR: Failed to initialize BIN database\n")
+		fmt.Fprintf(os.Stderr, "  Error: %v\n\n", err)
+		fmt.Fprintln(os.Stderr, "  This error means the BIN database file could not be loaded.")
+		fmt.Fprintln(os.Stderr, "  The scanner cannot detect card types without this database.")
+		fmt.Fprintln(os.Stderr, "\n  Troubleshooting steps:")
+		fmt.Fprintln(os.Stderr, "  1. Verify file exists: internal/detector/bindata/bin_ranges.json")
+		fmt.Fprintln(os.Stderr, "  2. Check file permissions (must be readable)")
+		fmt.Fprintln(os.Stderr, "  3. Validate JSON syntax using a JSON validator")
+		fmt.Fprintln(os.Stderr, "  4. Ensure file is not corrupted")
 		os.Exit(1)
 	}
-	
-	// Database başarıyla yüklendi, bilgileri göster
+
+	// Database loaded successfully - show info
 	db, _ := detector.GetGlobalBINDatabase()
 	fmt.Printf("✓ BIN Database v%s loaded successfully\n", db.GetVersion())
 	fmt.Printf("  Last updated: %s\n", db.GetLastUpdated())
 	fmt.Printf("  Supporting %d card issuers\n", db.GetIssuerCount())
 	fmt.Println()
-	
+
 	// ============================================================
-	// STEP 4: Load configuration
+	// STEP 4: Load configuration from config.json
 	// ============================================================
+	// Configuration is optional - use defaults if file missing
 
 	cfg, err := config.Load("config.json")
 	if err != nil {
-		fmt.Printf("Warning: Could not load config.json: %v\n", err)
-		fmt.Println("Using default settings\n")
+		fmt.Printf("⚠ Warning: Could not load config.json: %v\n", err)
+		fmt.Println("  Using default configuration\n")
 
-		// Use default config
+		// Fallback to default configuration
 		cfg = &config.Config{
 			ScanMode:            "blacklist",
 			WhitelistExtensions: []string{},
-			BlacklistExtensions: []string{".exe", ".dll", ".so", ".jpg", ".png", ".mp4"},
-			ExcludeDirs:         []string{".git", "node_modules"},
-			MaxFileSize:         "50MB",
+			BlacklistExtensions: []string{
+				".exe", ".dll", ".so", ".dylib", // Binaries
+				".jpg", ".png", ".gif", ".mp4", // Media
+				".zip", ".tar", ".gz", ".rar", // Archives
+			},
+			ExcludeDirs: []string{
+				".git", "node_modules", "vendor", // Common dev dirs
+			},
+			MaxFileSize: "50MB",
 		}
 	}
 
 	// ============================================================
-	// STEP 5: Apply CLI overrides
+	// STEP 5: Apply CLI overrides to configuration
 	// ============================================================
+	// CLI flags take precedence over config.json
 
-	// Start with config values
+	// Start with config file values
 	scanMode := cfg.ScanMode
 	whitelistExts := cfg.WhitelistExtensions
 	blacklistExts := cfg.BlacklistExtensions
 	excludeDirs := cfg.ExcludeDirs
 
-	// Override mode if specified
+	// Override scan mode if specified via CLI
 	if *modeFlag != "" {
-		validModes := map[string]bool{"whitelist": true, "blacklist": true}
-		if !validModes[*modeFlag] {
-			fmt.Printf("Error: invalid mode '%s', must be 'whitelist' or 'blacklist'\n", *modeFlag)
+		if *modeFlag != "whitelist" && *modeFlag != "blacklist" {
+			fmt.Fprintf(os.Stderr, "Error: invalid mode '%s', must be 'whitelist' or 'blacklist'\n", *modeFlag)
 			os.Exit(1)
 		}
 		scanMode = *modeFlag
-		fmt.Printf("✓ Mode override from CLI: %s\n", scanMode)
+		fmt.Printf("✓ Scan mode overridden via CLI: %s\n", scanMode)
 	}
 
-	// Override extensions if specified
+	// Override extensions if specified via CLI
 	if *extensionsFlag != "" {
 		extensions := strings.Split(*extensionsFlag, ",")
+		// Trim whitespace from each extension
 		for i := range extensions {
 			extensions[i] = strings.TrimSpace(extensions[i])
 		}
 
-		// Apply to the active mode
+		// Apply to active scan mode
 		if scanMode == "whitelist" {
 			whitelistExts = extensions
-			fmt.Printf("✓ Whitelist override from CLI: %d extensions\n", len(extensions))
+			fmt.Printf("✓ Whitelist extensions overridden via CLI: %d extensions\n", len(extensions))
 		} else {
 			blacklistExts = extensions
-			fmt.Printf("✓ Blacklist override from CLI: %d extensions\n", len(extensions))
+			fmt.Printf("✓ Blacklist extensions overridden via CLI: %d extensions\n", len(extensions))
 		}
 	}
 
-	// Override exclude dirs if specified
+	// Override exclude directories if specified via CLI
 	if *excludeFlag != "" {
 		excludeDirs = strings.Split(*excludeFlag, ",")
+		// Trim whitespace from each directory name
 		for i := range excludeDirs {
 			excludeDirs[i] = strings.TrimSpace(excludeDirs[i])
 		}
+		fmt.Printf("✓ Exclude directories overridden via CLI: %d directories\n", len(excludeDirs))
 	}
 
-	// Normalize extensions (add dots, lowercase)
+	// Normalize all extensions (add dots, convert to lowercase)
 	cfg.NormalizeExtensions()
 
 	// ============================================================
-	// STEP 6: Determine number of workers
+	// STEP 6: Determine optimal worker count
 	// ============================================================
+	// Balance between performance and resource usage
 
 	numCPU := runtime.NumCPU()
 	workers := *workersFlag
 
+	// If not specified, use half of CPU cores (minimum 1)
 	if workers == 0 {
-		// Default: Half of CPU cores (minimum 1)
 		workers = numCPU / 2
 		if workers < 1 {
 			workers = 1
@@ -181,51 +198,53 @@ func main() {
 
 	// Validate worker count
 	if workers < 1 {
-		fmt.Println("Error: workers must be at least 1")
+		fmt.Fprintln(os.Stderr, "Error: workers must be at least 1")
 		os.Exit(1)
 	}
 
+	// Warn if worker count exceeds CPU cores
 	if workers > numCPU {
-		fmt.Printf("Warning: workers (%d) exceeds CPU cores (%d), limiting to %d\n", workers, numCPU, numCPU)
+		fmt.Printf("⚠ Warning: workers (%d) exceeds CPU cores (%d), limiting to %d\n",
+			workers, numCPU, numCPU)
 		workers = numCPU
 	}
 
 	// ============================================================
-	// STEP 7: Validate directory
+	// STEP 7: Validate target path
 	// ============================================================
+	// Ensure the path exists and is accessible
 
 	err = config.ValidatePath(*pathFlag)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	// ============================================================
-	// STEP 8: Create filters
+	// STEP 8: Create file and directory filters
 	// ============================================================
 
-	// Extension filter (whitelist or blacklist)
+	// Extension filter (whitelist or blacklist mode)
 	extFilter := filter.NewExtensionFilter(scanMode, whitelistExts, blacklistExts)
 
 	// Directory filter (always applied)
 	dirFilter := filter.NewDirectoryFilter(excludeDirs)
 
 	// ============================================================
-	// STEP 9: Parse max file size
+	// STEP 9: Parse maximum file size
 	// ============================================================
 
 	maxFileSize, err := cfg.GetMaxFileSizeBytes()
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	// ============================================================
-	// STEP 10: Create scanner
+	// STEP 10: Create scanner with configuration
 	// ============================================================
-	// Scanner artık BIN database'i kullanacak (MatchIssuer fonksiyonu ile)
 
-	// Progress callback
+	// Progress tracker for UI updates
 	progressTracker := ui.NewProgressTracker()
 
 	scannerConfig := &scanner.Config{
@@ -233,6 +252,7 @@ func main() {
 		DirFilter:   dirFilter,
 		MaxFileSize: maxFileSize,
 		Workers:     workers,
+		// Progress callback for real-time updates
 		ProgressCallback: func(scanned, total, cards int) {
 			progressTracker.Update(scanned, total, cards)
 		},
@@ -241,7 +261,7 @@ func main() {
 	s := scanner.NewScanner(scannerConfig)
 
 	// ============================================================
-	// STEP 11: Show scan information
+	// STEP 11: Display scan configuration
 	// ============================================================
 
 	var extensionCount int
@@ -259,23 +279,21 @@ func main() {
 	ui.ShowScanInfo(*pathFlag, scanMode, extensionCount, workers, maxSizeStr)
 
 	// ============================================================
-	// STEP 12: Run the scan!
+	// STEP 12: Execute the scan
 	// ============================================================
-	// Scanner içinde MatchIssuer çağrıları yapılacak
-	// MatchIssuer otomatik olarak global BIN database'i kullanacak
 
-	progressTracker.Start()
+	var result *scanner.ScanResult
 
-	result, err := s.ScanDirectory(*pathFlag)
+	fmt.Println("Starting scan...")
+	result, err = s.ScanDirectory(*pathFlag)
+
 	if err != nil {
-		fmt.Printf("\nScan failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "\n✗ Scan failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	progressTracker.Finish()
-
 	// ============================================================
-	// STEP 13: Show summary
+	// STEP 13: Display results
 	// ============================================================
 
 	ui.ShowSummary(
@@ -289,7 +307,7 @@ func main() {
 	)
 
 	// ============================================================
-	// STEP 14: Generate and export report (if requested)
+	// STEP 14: Export report if output file specified
 	// ============================================================
 
 	if *outputFlag != "" {
@@ -298,10 +316,10 @@ func main() {
 		if scanMode == "whitelist" {
 			reportExtensions = whitelistExts
 		} else {
-			reportExtensions = []string{"all except blacklist"}
+			reportExtensions = blacklistExts
 		}
 
-		// Create report
+		// Create report instance
 		rep := report.NewReport(
 			Version,
 			*pathFlag,
@@ -310,57 +328,27 @@ func main() {
 			result,
 		)
 
-		// Export report
+		// Generate and save report
+		// Format is determined automatically from file extension
+		fmt.Printf("\nGenerating report...\n")
 		err = rep.Export(*outputFlag)
 		if err != nil {
-			fmt.Printf("\n  Error saving report: %v\n", err)
+			fmt.Fprintf(os.Stderr, "✗ Failed to generate report: %v\n", err)
 			os.Exit(1)
 		}
 
-		ui.ShowExportSuccess(*outputFlag)
+		fmt.Printf("✓ Report saved: %s\n", *outputFlag)
 	}
 
 	// ============================================================
-	// STEP 15: Show detection statistics (NEW!)
+	// STEP 15: Exit with appropriate code
 	// ============================================================
-	// BIN database kullanımı hakkında bilgi göster
-	
+
+	// Exit with error code if cards were found (for CI/CD integration)
 	if result.CardsFound > 0 {
-		fmt.Println()
-		fmt.Println("=============================================================")
-		fmt.Println("CARD DETECTION STATISTICS (v3.0 with BIN Database)")
-		fmt.Println("=============================================================")
-		
-		// Her kart türünün sayısını göster
-		cardTypeCounts := make(map[string]int)
-		for _, finding := range result.Findings {
-			cardTypeCounts[finding.CardType]++
-		}
-		
-		fmt.Println("Cards detected by issuer:")
-		for cardType, count := range cardTypeCounts {
-			// Issuer bilgisini al
-			info, ok := db.GetIssuerInfo(cardType)
-			displayName := cardType
-			if ok {
-				displayName = info.DisplayName
-			}
-			
-			percentage := float64(count) / float64(result.CardsFound) * 100
-			fmt.Printf("  %-20s: %3d cards (%.1f%%)\n", displayName, count, percentage)
-		}
-		
-		fmt.Println()
-		fmt.Println("Detection accuracy: ~98% (6-digit BIN validation)")
-		fmt.Println("False positive rate: <2% (priority-based overlap resolution)")
-		fmt.Println("=============================================================")
+		os.Exit(2) // Exit code 2 indicates cards were found
 	}
 
-	// ============================================================
-	// STEP 16: Exit with appropriate code
-	// ============================================================
-
-	// Exit with code 0 (success)
-	// Even if cards were found, the scan itself succeeded
+	// Success - no cards found
 	os.Exit(0)
 }
