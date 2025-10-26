@@ -90,6 +90,11 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
 	}
 
 	// getCardColor returns professional colors for each card brand
+	// Colors are based on:
+	// - Official brand guidelines (for major brands)
+	// - National colors (for government-issued cards)
+	// - Industry standards (for specialized cards)
+	// - Regional color preferences (for regional cards)
 	getCardColor := func(cardType string) string {
 		colors := map[string]string{
 			"Visa":               "#1A1F71",
@@ -103,6 +108,7 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
 			"RuPay":              "#097CBE",
 			"Troy":               "#00ADEF",
 			"Mir":                "#4DB45E",
+			"Visa Electron":      "#1A1F71",
 			"Elo":                "#FFCB05",
 			"Hipercard":          "#D32F2F",
 			"Aura":               "#FF6B35",
@@ -114,19 +120,30 @@ func (e *HTMLExporter) Export(report *Report, filename string) error {
 			"Uzcard":             "#0066CC",
 			"Humo":               "#00A3E0",
 			"Verve":              "#00425F",
+			"PayPak":             "#006747",
+			"LankaPay":           "#FF7900",
+			"Meeza":              "#C8102E",
+			"ArCa":               "#0033A0",
 			"Dankort":            "#ED1B2E",
 			"Forbrugsforeningen": "#8B4513",
 			"InterPayment":       "#2E3192",
 			"InstaPayment":       "#009FE3",
 			"NPS Pridnestrovie":  "#6B8E23",
+			"UkrCard":            "#005BBB",
+			"BelCart":            "#C8102E",
+			"NSMEP":              "#DA291C",
 			"UATP":               "#003087",
 			"EFTPOS":             "#00A651",
 			"EBT":                "#4A90E2",
 		}
+
 		if color, ok := colors[cardType]; ok {
 			return color
 		}
-		return "#6C757D" // Bootstrap gray
+
+		// Default color for unknown card types
+		// Using Bootstrap's secondary gray
+		return "#6C757D"
 	}
 
 	// ============================================================
