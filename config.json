@@ -120,7 +120,8 @@
     "bas",
     "cls",
     "frm",
-    "ctl"
+    "ctl",
+    "pptx"
   ],
   
   "blacklist_extensions": [
@@ -240,7 +241,6 @@
     ".venv",
     "venv",
     "env",
-    "ENV",
     "virtualenv",
     ".virtualenv",
     "venv.bak",
