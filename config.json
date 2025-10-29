@@ -1,5 +1,5 @@
 {
-  "_comment": "BasicPanScanner Configuration v2.1.0",
+  "_comment": "BasicPanScanner Configuration v3.0",
   "_info": {
     "scan_mode": "Controls which files to scan based on extensions",
     "modes": {
@@ -51,9 +51,15 @@
     "xls",
     "xlsx",
     "xlsm",
+    "xltx",
+    "xltm",
     "ods",
+    "odp",
     "doc",
     "docx",
+    "docm",
+    "dotx",
+    "dotm",
     "odt",
     "rtf",
     "pdf",
@@ -121,7 +127,10 @@
     "cls",
     "frm",
     "ctl",
-    "pptx"
+    "pptx",
+    "pptm",
+    "potx",
+    "potm"
   ],
   
   "blacklist_extensions": [
