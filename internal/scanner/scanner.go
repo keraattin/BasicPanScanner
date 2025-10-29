@@ -1,9 +1,11 @@
 // Package scanner handles file and directory scanning for credit cards
 // This package orchestrates the scanning process using detector and filter packages
 //
-// UPDATED v5.0 - Pure GO Office Document Support:
+// UPDATED v3.0 - Pure GO Office Document Support:
 //   - Uses ONLY GO standard library (no external dependencies!)
-//   - Supports DOCX, XLSX, PPTX
+//   - Supports 17 office document formats!
+//   - Microsoft Office: DOCX, XLSX, PPTX (+ macro/template variants)
+//   - OpenDocument: ODT, ODS, ODP
 //   - No external servers, No API calls
 //   - 100% self-contained
 //   - Simple ZIP+XML parsing
@@ -133,15 +135,15 @@ func (s *basicScanner) GetConfig() *Config {
 
 // ScanFile scans a single file for credit cards
 //
-// UPDATED v5.0:
-//   - NOW SUPPORTS OFFICE DOCUMENTS (DOCX, XLSX, PPTX)
+// UPDATED v3.0:
+//   - NOW SUPPORTS 17 OFFICE DOCUMENT FORMATS!
 //   - Uses ONLY GO standard library!
 //   - NO external dependencies
 //   - NO external servers or API calls
 //   - 100% self-contained
 //
 // HOW IT WORKS:
-//  1. Check if file is an office document (.docx, .xlsx, .pptx)
+//  1. Check if file is an office document (17 supported formats)
 //  2. If YES: Extract text using our pure GO parser (ZIP+XML)
 //  3. If NO: Read directly with os.ReadFile (plain text)
 //  4. Pass text to credit card detector
@@ -150,9 +152,16 @@ func (s *basicScanner) GetConfig() *Config {
 // SUPPORTED FILE TYPES:
 //
 //	✅ Plain text files (.txt, .log, .csv, .json, etc.)
-//	✅ DOCX (Microsoft Word 2007+)
-//	✅ XLSX (Microsoft Excel 2007+)
-//	✅ PPTX (Microsoft PowerPoint 2007+)
+//
+//	✅ Microsoft Office 2007+ (14 formats):
+//	   • Word: DOCX, DOCM, DOTX, DOTM
+//	   • Excel: XLSX, XLSM, XLTX, XLTM
+//	   • PowerPoint: PPTX, PPTM, POTX, POTM
+//
+//	✅ OpenDocument Format (3 formats):
+//	   • Text: ODT
+//	   • Spreadsheet: ODS
+//	   • Presentation: ODP
 //
 // NOT SUPPORTED (would need external libraries):
 //
@@ -168,14 +177,14 @@ func (s *basicScanner) GetConfig() *Config {
 //
 // Example:
 //
-//		Scanning a text file (direct read)
-//		findings, err := scanner.ScanFile("/var/log/app.log")
+//	Scanning a text file (direct read)
+//	findings, err := scanner.ScanFile("/var/log/app.log")
 //
-//		Scanning a Word document (ZIP+XML parsing)
-//		findings, err := scanner.ScanFile("/documents/report.docx")
+//	Scanning a Word document (ZIP+XML parsing)
+//	findings, err := scanner.ScanFile("/documents/report.docx")
 //
-//	 Scanning an Excel spreadsheet (ZIP+XML parsing)
-//		findings, err := scanner.ScanFile("/data/customers.xlsx")
+//	Scanning an Excel spreadsheet (ZIP+XML parsing)
+//	findings, err := scanner.ScanFile("/data/customers.xlsx")
 func (s *basicScanner) ScanFile(filePath string) ([]Finding, error) {
 	// ============================================================
 	// STEP 1: Read file content
