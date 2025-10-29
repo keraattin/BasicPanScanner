@@ -55,9 +55,21 @@ import (
 
 // isOfficeDocument checks if a file is an office document we can parse
 //
-// We only support modern Office formats (2007+) because they are ZIP+XML.
+// We support modern Office formats (2007+) and OpenDocument formats
+// because they all use ZIP+XML structure.
 // Old formats (.doc, .xls, .ppt) use binary format and would require
 // complex parsing that's beyond standard library capabilities.
+//
+// SUPPORTED FORMATS:
+//
+//	Microsoft Office 2007+ (ZIP+XML):
+//	  - DOCX, DOCM, DOTX, DOTM (Word family)
+//	  - XLSX, XLSM, XLTX, XLTM (Excel family)
+//	  - PPTX, PPTM, POTX, POTM (PowerPoint family)
+//	OpenDocument Format (ZIP+XML):
+//	  - ODT (Text documents)
+//	  - ODS (Spreadsheets)
+//	  - ODP (Presentations)
 //
 // Parameters:
 //   - filePath: Full path to the file
@@ -67,10 +79,10 @@ import (
 //
 // Example:
 //
-//	isOfficeDocument("report.docx")  // true - supported!
-//	isOfficeDocument("data.xlsx")    // true - supported!
+//	isOfficeDocument("report.docx")  // true - Word document
+//	isOfficeDocument("data.xlsm")    // true - Excel with macros
+//	isOfficeDocument("doc.odt")      // true - OpenDocument text
 //	isOfficeDocument("old.doc")      // false - old format, not supported
-//	isOfficeDocument("file.pdf")     // false - not supported
 func isOfficeDocument(filePath string) bool {
 	// Extract file extension (e.g., ".docx")
 	ext := strings.ToLower(filepath.Ext(filePath))
@@ -78,12 +90,44 @@ func isOfficeDocument(filePath string) bool {
 	// Check if extension is a supported modern Office format
 	// These are ZIP files with XML inside - we can parse them!
 	switch ext {
+	// Microsoft Word family (all use same structure)
 	case ".docx": // Word 2007+
 		return true
+	case ".docm": // Word with macros
+		return true
+	case ".dotx": // Word template
+		return true
+	case ".dotm": // Word template with macros
+		return true
+
+	// Microsoft Excel family (all use same structure)
 	case ".xlsx": // Excel 2007+
 		return true
-	case ".pptx": // PowerPoint 2007+ (basic support)
+	case ".xlsm": // Excel with macros
 		return true
+	case ".xltx": // Excel template
+		return true
+	case ".xltm": // Excel template with macros
+		return true
+
+	// Microsoft PowerPoint family (all use same structure)
+	case ".pptx": // PowerPoint 2007+
+		return true
+	case ".pptm": // PowerPoint with macros
+		return true
+	case ".potx": // PowerPoint template
+		return true
+	case ".potm": // PowerPoint template with macros
+		return true
+
+	// OpenDocument Format (LibreOffice/OpenOffice)
+	case ".odt": // Text document (like Word)
+		return true
+	case ".ods": // Spreadsheet (like Excel)
+		return true
+	case ".odp": // Presentation (like PowerPoint)
+		return true
+
 	default:
 		return false
 	}
@@ -100,8 +144,13 @@ func isOfficeDocument(filePath string) bool {
 //
 // PROCESS:
 //  1. Detect file type from extension
-//  2. Call appropriate parser (readDOCX, readXLSX, or readPPTX)
+//  2. Call appropriate parser (readDOCX, readXLSX, readPPTX, or OpenDocument parsers)
 //  3. Return extracted text as string
+//
+// SUPPORTED FORMATS:
+//   - Microsoft Office 2007+ (14 formats)
+//   - OpenDocument Format (3 formats)
+//   - Total: 17 office document formats!
 //
 // Parameters:
 //   - filePath: Full path to the office document
@@ -112,35 +161,65 @@ func isOfficeDocument(filePath string) bool {
 //
 // Example:
 //
-//	// Extract text from Word document
-//	text, err := readOfficeDocument("report.docx")
-//	if err != nil {
-//	    log.Printf("Failed to extract text: %v", err)
-//	    return
-//	}
-//	// Now 'text' contains all text from the document
-//	// We can scan it for credit card numbers
+//	Extract text from various formats
+//	text, err := readOfficeDocument("report.docx")    // Word
+//	text, err := readOfficeDocument("data.xlsm")      // Excel with macros
+//	text, err := readOfficeDocument("slides.pptx")    // PowerPoint
+//	text, err := readOfficeDocument("document.odt")   // OpenDocument
 func readOfficeDocument(filePath string) (string, error) {
 	// Get file extension to determine document type
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	// Route to appropriate parser based on file type
 	switch ext {
-	case ".docx":
-		// Handle Microsoft Word documents
+	// ============================================================
+	// MICROSOFT WORD FAMILY
+	// ============================================================
+	// All Word formats use the same XML structure (word/document.xml)
+	// The difference is just additional files for macros/templates
+	case ".docx", ".docm", ".dotx", ".dotm":
 		return readDOCX(filePath)
 
-	case ".xlsx":
-		// Handle Microsoft Excel spreadsheets
+	// ============================================================
+	// MICROSOFT EXCEL FAMILY
+	// ============================================================
+	// All Excel formats use the same XML structure
+	// (xl/sharedStrings.xml and xl/worksheets/*.xml)
+	case ".xlsx", ".xlsm", ".xltx", ".xltm":
 		return readXLSX(filePath)
 
-	case ".pptx":
-		// Handle Microsoft PowerPoint presentations
+	// ============================================================
+	// MICROSOFT POWERPOINT FAMILY
+	// ============================================================
+	// All PowerPoint formats use the same XML structure
+	// (ppt/slides/*.xml)
+	case ".pptx", ".pptm", ".potx", ".potm":
 		return readPPTX(filePath)
+
+	// ============================================================
+	// OPENDOCUMENT TEXT (LibreOffice/OpenOffice)
+	// ============================================================
+	// ODT uses content.xml for main content
+	case ".odt":
+		return readODT(filePath)
+
+	// ============================================================
+	// OPENDOCUMENT SPREADSHEET (LibreOffice/OpenOffice)
+	// ============================================================
+	// ODS uses content.xml with different XML structure
+	case ".ods":
+		return readODS(filePath)
+
+	// ============================================================
+	// OPENDOCUMENT PRESENTATION (LibreOffice/OpenOffice)
+	// ============================================================
+	// ODP uses content.xml with slides
+	case ".odp":
+		return readODP(filePath)
 
 	default:
 		// Unsupported file type
-		return "", fmt.Errorf("unsupported office document format: %s (only .docx, .xlsx, .pptx supported)", ext)
+		return "", fmt.Errorf("unsupported office document format: %s", ext)
 	}
 }
 
@@ -653,6 +732,278 @@ func extractTextFromSlideXML(xmlContent string) string {
 			// Check if this is the end of <a:t> tag
 			if t.Name.Local == "t" {
 				inTextTag = false
+			}
+		}
+	}
+
+	return result.String()
+}
+
+// ============================================================
+// OPENDOCUMENT FORMAT READERS (LibreOffice/OpenOffice)
+// ============================================================
+
+// readODT extracts text from OpenDocument Text (.odt) file
+//
+// ODT FORMAT STRUCTURE:
+//   - An .odt file is a ZIP archive (like DOCX)
+//   - Inside: content.xml contains the main document text
+//   - The XML has <text:p> tags for paragraphs
+//   - And <text:span> tags for text runs
+//
+// WHAT WE EXTRACT:
+//
+//	✅ All paragraphs
+//	✅ All text content
+//	✅ Table content
+//
+// Parameters:
+//   - filePath: Full path to the .odt file
+//
+// Returns:
+//   - string: All text content from the document
+//   - error: Error if file can't be opened or parsed
+//
+// Example:
+//
+//	text, err := readODT("/documents/report.odt")
+func readODT(filePath string) (string, error) {
+	// Open ODT file as ZIP archive
+	zipReader, err := zip.OpenReader(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open ODT as ZIP: %w", err)
+	}
+	defer zipReader.Close()
+
+	// Find and read content.xml
+	var contentXML string
+
+	for _, file := range zipReader.File {
+		// Look for the main content XML file
+		// In OpenDocument, it's simply "content.xml" at the root
+		if file.Name == "content.xml" {
+			rc, err := file.Open()
+			if err != nil {
+				return "", fmt.Errorf("failed to open content.xml: %w", err)
+			}
+			defer rc.Close()
+
+			xmlContent, err := io.ReadAll(rc)
+			if err != nil {
+				return "", fmt.Errorf("failed to read content.xml: %w", err)
+			}
+
+			contentXML = string(xmlContent)
+			break
+		}
+	}
+
+	// Check if we found the content XML
+	if contentXML == "" {
+		return "", fmt.Errorf("content.xml not found in ODT file")
+	}
+
+	// Extract text from OpenDocument XML
+	text := extractTextFromOpenDocumentXML(contentXML)
+
+	return text, nil
+}
+
+// readODS extracts text from OpenDocument Spreadsheet (.ods) file
+//
+// ODS FORMAT STRUCTURE:
+//   - An .ods file is a ZIP archive (like XLSX)
+//   - Inside: content.xml contains all sheets and cells
+//   - The XML has <table:table-cell> tags for cells
+//
+// WHAT WE EXTRACT:
+//
+//	✅ Text from all cells
+//	✅ Numbers from all cells
+//	✅ Content from all sheets
+//
+// Parameters:
+//   - filePath: Full path to the .ods file
+//
+// Returns:
+//   - string: All text content from all sheets
+//   - error: Error if file can't be opened or parsed
+//
+// Example:
+//
+//	text, err := readODS("/reports/data.ods")
+func readODS(filePath string) (string, error) {
+	// Open ODS file as ZIP archive
+	zipReader, err := zip.OpenReader(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open ODS as ZIP: %w", err)
+	}
+	defer zipReader.Close()
+
+	// Find and read content.xml
+	var contentXML string
+
+	for _, file := range zipReader.File {
+		if file.Name == "content.xml" {
+			rc, err := file.Open()
+			if err != nil {
+				return "", fmt.Errorf("failed to open content.xml: %w", err)
+			}
+			defer rc.Close()
+
+			xmlContent, err := io.ReadAll(rc)
+			if err != nil {
+				return "", fmt.Errorf("failed to read content.xml: %w", err)
+			}
+
+			contentXML = string(xmlContent)
+			break
+		}
+	}
+
+	if contentXML == "" {
+		return "", fmt.Errorf("content.xml not found in ODS file")
+	}
+
+	// Extract text from OpenDocument XML
+	text := extractTextFromOpenDocumentXML(contentXML)
+
+	return text, nil
+}
+
+// readODP extracts text from OpenDocument Presentation (.odp) file
+//
+// ODP FORMAT STRUCTURE:
+//   - An .odp file is a ZIP archive (like PPTX)
+//   - Inside: content.xml contains all slides
+//   - The XML has <draw:page> tags for slides
+//
+// WHAT WE EXTRACT:
+//
+//	✅ Text from all slides
+//	✅ Text from text boxes
+//	✅ Slide titles
+//
+// Parameters:
+//   - filePath: Full path to the .odp file
+//
+// Returns:
+//   - string: All text content from all slides
+//   - error: Error if file can't be opened or parsed
+//
+// Example:
+//
+//	text, err := readODP("/presentations/slides.odp")
+func readODP(filePath string) (string, error) {
+	// Open ODP file as ZIP archive
+	zipReader, err := zip.OpenReader(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open ODP as ZIP: %w", err)
+	}
+	defer zipReader.Close()
+
+	// Find and read content.xml
+	var contentXML string
+
+	for _, file := range zipReader.File {
+		if file.Name == "content.xml" {
+			rc, err := file.Open()
+			if err != nil {
+				return "", fmt.Errorf("failed to open content.xml: %w", err)
+			}
+			defer rc.Close()
+
+			xmlContent, err := io.ReadAll(rc)
+			if err != nil {
+				return "", fmt.Errorf("failed to read content.xml: %w", err)
+			}
+
+			contentXML = string(xmlContent)
+			break
+		}
+	}
+
+	if contentXML == "" {
+		return "", fmt.Errorf("content.xml not found in ODP file")
+	}
+
+	// Extract text from OpenDocument XML
+	text := extractTextFromOpenDocumentXML(contentXML)
+
+	return text, nil
+}
+
+// extractTextFromOpenDocumentXML extracts text from OpenDocument XML content
+//
+// OpenDocument XML structure (simplified):
+//
+//	<office:document-content>
+//	  <office:body>
+//	    <office:text>           <!-- For ODT -->
+//	      <text:p>Hello</text:p>  <!-- Paragraph -->
+//	      <text:p>World</text:p>
+//	    </office:text>
+//	    <office:spreadsheet>    <!-- For ODS -->
+//	      <table:table-cell>
+//	        <text:p>Data</text:p>
+//	      </table:table-cell>
+//	    </office:spreadsheet>
+//	    <office:presentation>   <!-- For ODP -->
+//	      <draw:page>
+//	        <text:p>Slide text</text:p>
+//	      </draw:page>
+//	    </office:presentation>
+//	  </office:body>
+//	</office:document-content>
+//
+// We extract all text from <text:p> tags (paragraphs)
+// and from actual text content in various tags.
+//
+// Parameters:
+//   - xmlContent: The XML content from content.xml
+//
+// Returns:
+//   - string: Extracted plain text
+func extractTextFromOpenDocumentXML(xmlContent string) string {
+	var result strings.Builder
+	decoder := xml.NewDecoder(strings.NewReader(xmlContent))
+	inTextTag := false
+
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			break
+		}
+
+		switch t := token.(type) {
+		case xml.StartElement:
+			// OpenDocument uses various text tags
+			// text:p = paragraph
+			// text:h = heading
+			// text:span = text span
+			// We look for any tag with "text" in the namespace
+			if strings.Contains(t.Name.Space, "text") || t.Name.Local == "p" || t.Name.Local == "h" || t.Name.Local == "span" {
+				inTextTag = true
+			}
+
+		case xml.CharData:
+			// If we're in a text tag, this is text content
+			if inTextTag {
+				text := strings.TrimSpace(string(t))
+				if text != "" {
+					result.WriteString(text)
+					result.WriteString(" ")
+				}
+			}
+
+		case xml.EndElement:
+			// End of text tag
+			if strings.Contains(t.Name.Space, "text") || t.Name.Local == "p" || t.Name.Local == "h" {
+				inTextTag = false
+				result.WriteString("\n")
 			}
 		}
 	}
