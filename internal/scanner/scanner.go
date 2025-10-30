@@ -13,6 +13,7 @@ package scanner
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -193,8 +194,17 @@ func (s *basicScanner) ScanFile(filePath string) ([]Finding, error) {
 	var text string // Will hold the file content as text
 	var err error
 
-	// Check if this is an office document
-	if isOfficeDocument(filePath) {
+	// Check if PDF file
+	if isPDF, _ := isPDFFile(filePath); isPDF {
+		text, err = readPDF(filePath)
+		if err != nil {
+			// Log the error but continue with empty text
+			log.Printf("Warning: PDF read error for %s: %v", filePath, err)
+			text = "" // Continue with empty text
+		}
+
+		// Check if this is an office document
+	} else if isOfficeDocument(filePath) {
 		// OFFICE DOCUMENT PATH
 		// This handles: .docx, .xlsx, .pptx
 		//
