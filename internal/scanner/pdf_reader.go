@@ -1,5 +1,5 @@
 // Package scanner - Professional PDF Text Extraction (Standard Library Only)
-// File: internal/scanner/pdf_reader_enhanced.go
+// File: internal/scanner/pdf_reader.go
 //
 // ============================================================================
 // ENHANCED PDF READER - Production-Ready Version
@@ -68,9 +68,9 @@ import (
 // ============================================================================
 
 const (
-	// MaxPDFSize defines the maximum PDF file size we'll process (500MB)
+	// MaxPDFSize defines the maximum PDF file size we'll process (150MB)
 	// This prevents memory issues with huge files
-	MaxPDFSize = 500 * 1024 * 1024
+	MaxPDFSize = 150 * 1024 * 1024
 
 	// MaxStreamSize defines the maximum size for a single stream (100MB)
 	// Individual streams larger than this are skipped
