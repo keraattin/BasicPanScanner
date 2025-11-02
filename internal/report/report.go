@@ -236,6 +236,8 @@ func (r *Report) Export(filename string) error {
 		exporter = &XMLExporter{}
 	case ".html":
 		exporter = &HTMLExporter{}
+	case ".pdf":
+		exporter = &PDFExporter{}
 	default:
 		return fmt.Errorf("unsupported format: %s (use .json, .csv, .txt, .xml, or .html)", ext)
 	}
