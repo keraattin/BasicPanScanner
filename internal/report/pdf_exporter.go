@@ -24,57 +24,6 @@ import (
 type PDFExporter struct{}
 
 // ============================================================
-// WHAT IS A PDF FILE?
-// ============================================================
-// A PDF is actually a TEXT file with a specific structure!
-// It contains:
-//   1. Header (%PDF-1.4)
-//   2. Objects (numbered sections of content)
-//   3. Cross-reference table (index of objects)
-//   4. Trailer (tells where to find things)
-//
-// We'll build this step by step!
-
-// ============================================================
-// PDF STRUCTURE EXPLAINED
-// ============================================================
-/*
-A simple PDF looks like this:
-
-%PDF-1.4                          ← PDF version header
-1 0 obj                           ← Object 1 (Catalog)
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-
-2 0 obj                           ← Object 2 (Pages)
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-
-3 0 obj                           ← Object 3 (Page)
-<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>
-endobj
-
-4 0 obj                           ← Object 4 (Content)
-<< /Length 44 >>
-stream
-BT /F1 12 Tf 100 700 Td (Hello World) Tj ET
-endstream
-endobj
-
-xref                              ← Cross-reference table
-0 5
-0000000000 65535 f
-0000000009 00000 n
-...
-
-trailer                           ← Trailer
-<< /Size 5 /Root 1 0 R >>
-startxref
-position
-%%EOF                             ← End of file
-*/
-
-// ============================================================
 // MAIN EXPORT FUNCTION
 // ============================================================
 // Export implements the Exporter interface for PDF format
@@ -255,7 +204,7 @@ func (e *PDFExporter) buildPDFContent(report *Report) string {
 		e.escapeString(report.Directory)))
 	content.WriteString("T*\n")
 	content.WriteString(fmt.Sprintf("(Duration: %s) Tj\n",
-		report.GetFormattedDuration()))
+		e.formatDuration(report.Duration)))
 	content.WriteString("T*\n")
 	content.WriteString(fmt.Sprintf("(Files Scanned: %d / %d) Tj\n",
 		report.ScannedFiles, report.TotalFiles))
@@ -266,11 +215,13 @@ func (e *PDFExporter) buildPDFContent(report *Report) string {
 	content.WriteString("(STATISTICS) Tj\n")
 	content.WriteString("/F1 10 Tf\n") // Back to normal size
 	content.WriteString("T*\n")
+
+	// FIXED: Use correct field names
 	content.WriteString(fmt.Sprintf("(Total Cards Found: %d) Tj\n",
-		report.Statistics.TotalCards))
+		report.CardsFound))
 	content.WriteString("T*\n")
 	content.WriteString(fmt.Sprintf("(Affected Files: %d) Tj\n",
-		report.Statistics.AffectedFiles))
+		report.Statistics.FilesWithCards))
 	content.WriteString("T*\n")
 	content.WriteString(fmt.Sprintf("(High-Risk Files: %d) Tj\n",
 		report.Statistics.HighRiskFiles))
@@ -319,9 +270,10 @@ func (e *PDFExporter) buildPDFContent(report *Report) string {
 	for i := 0; i < maxFiles; i++ {
 		fileStats := report.Statistics.TopFiles[i]
 		content.WriteString("T*\n")
+		// FIXED: Use FilePath instead of Filename
 		content.WriteString(fmt.Sprintf("(%d. %s - %d cards) Tj\n",
 			i+1,
-			e.escapeString(e.truncateString(fileStats.Filename, 50)),
+			e.escapeString(e.truncateString(fileStats.FilePath, 50)),
 			fileStats.CardCount))
 	}
 
@@ -332,27 +284,31 @@ func (e *PDFExporter) buildPDFContent(report *Report) string {
 	content.WriteString("/F1 10 Tf\n")
 	content.WriteString("T*\n")
 
-	if len(report.GroupedFindings) == 0 {
+	// FIXED: Use GroupedByFile instead of GroupedFindings
+	if len(report.GroupedByFile) == 0 {
 		content.WriteString("(No credit cards found.) Tj\n")
 	} else {
 		content.WriteString(fmt.Sprintf("(Found cards in %d files - see full report for details) Tj\n",
-			len(report.GroupedFindings)))
+			len(report.GroupedByFile)))
 
 		// Show first few files as examples (space limited in simple PDF)
 		maxFindings := 3
-		if len(report.GroupedFindings) < maxFindings {
-			maxFindings = len(report.GroupedFindings)
-		}
+		fileCount := 0
 
-		for i := 0; i < maxFindings; i++ {
-			grouped := report.GroupedFindings[i]
+		// FIXED: Iterate over GroupedByFile map
+		for filePath, findings := range report.GroupedByFile {
+			if fileCount >= maxFindings {
+				break
+			}
+
 			content.WriteString("T*\n")
 			content.WriteString(fmt.Sprintf("(File: %s) Tj\n",
-				e.escapeString(e.truncateString(grouped.Filename, 50))))
+				e.escapeString(e.truncateString(filePath, 50))))
 			content.WriteString("T*\n")
-			content.WriteString(fmt.Sprintf("(  Cards: %d | Size: %s) Tj\n",
-				len(grouped.Findings),
-				e.formatFileSize(grouped.FileSize)))
+			content.WriteString(fmt.Sprintf("(  Cards: %d) Tj\n",
+				len(findings)))
+
+			fileCount++
 		}
 	}
 
@@ -407,25 +363,22 @@ func (e *PDFExporter) truncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// formatFileSize converts bytes to human-readable format
-// Same as before
+// formatDuration formats duration nicely
+// Converts time.Duration to readable string
 //
 // Parameters:
-//   - size: File size in bytes
+//   - d: Duration to format
 //
 // Returns:
-//   - string: Formatted size string
-func (e *PDFExporter) formatFileSize(size int64) string {
-	const unit = 1024
-	if size < unit {
-		return fmt.Sprintf("%d B", size)
+//   - string: Formatted duration
+func (e *PDFExporter) formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
 	}
-
-	div, exp := int64(unit), 0
-	for n := size / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
-
-	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
+	minutes := int(d.Minutes())
+	seconds := int(d.Seconds()) % 60
+	return fmt.Sprintf("%dm %ds", minutes, seconds)
 }
