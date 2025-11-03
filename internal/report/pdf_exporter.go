@@ -1,5 +1,5 @@
-// Package report - Native PDF exporter (NO EXTERNAL LIBRARIES!)
-// Exports reports in PDF format using only GO standard library
+// Package report - Beautiful Native PDF exporter (NO EXTERNAL LIBRARIES!)
+// Creates professional, colorful PDFs using only GO standard library
 package report
 
 import (
@@ -10,367 +10,575 @@ import (
 )
 
 // ============================================================
-// PDF EXPORTER STRUCT (Native - No External Dependencies!)
+// BEAUTIFUL PDF EXPORTER - ZERO DEPENDENCIES!
 // ============================================================
-// PDFExporter exports reports in PDF format
-// This version uses ONLY GO's standard library
-// No external dependencies needed!
-//
-// PDF is ideal for:
-//   - Professional reports
-//   - Archiving and compliance
-//   - Print-ready documents
-//   - Sharing with management
-type PDFExporter struct{}
+// This creates professional PDFs similar to HTML reports
+// Features:
+//   ✅ Colors (blue header, colored sections)
+//   ✅ Multiple pages with automatic page breaks
+//   ✅ Multiple fonts (Helvetica, Bold, Italic)
+//   ✅ Boxes and borders
+//   ✅ Professional layout
+//   ✅ Beautiful typography
+//   ✅ ALL using only GO standard library!
+
+type PDFExporter struct {
+	currentY      float64  // Current Y position on page
+	pageHeight    float64  // Page height in points
+	marginTop     float64  // Top margin
+	marginBottom  float64  // Bottom margin
+	pageNumber    int      // Current page number
+	objectNumber  int      // Current PDF object number
+	objects       []string // PDF objects
+	objectOffsets []int    // Object byte offsets
+}
 
 // ============================================================
 // MAIN EXPORT FUNCTION
 // ============================================================
-// Export implements the Exporter interface for PDF format
-// Creates a PDF using ONLY GO standard library!
-//
-// Parameters:
-//   - report: The report to export
-//   - filename: Output filename (should end with .pdf)
-//
-// Returns:
-//   - error: Error if PDF can't be created or written
 func (e *PDFExporter) Export(report *Report, filename string) error {
-	// Build the PDF content step by step
+	// Initialize PDF state
+	e.pageHeight = 792 // US Letter height
+	e.marginTop = 50
+	e.marginBottom = 50
+	e.currentY = e.pageHeight - e.marginTop
+	e.pageNumber = 1
+	e.objectNumber = 0
+	e.objects = []string{}
+	e.objectOffsets = []int{}
+
 	var pdf strings.Builder
 
-	// Track the byte position of each object
-	// This is needed for the cross-reference table
-	objectPositions := make(map[int]int)
-
 	// ============================================================
-	// STEP 1: PDF HEADER
+	// PDF HEADER
 	// ============================================================
-	// Every PDF must start with this header
-	// It tells readers: "I'm a PDF version 1.4"
 	pdf.WriteString("%PDF-1.4\n")
-	pdf.WriteString("%âãÏÓ\n") // Binary comment (helps identify as binary)
-	pdf.WriteString("\n")
+	pdf.WriteString("%âãÏÓ\n\n")
 
 	// ============================================================
-	// STEP 2: CATALOG OBJECT (Object 1)
+	// CREATE ALL CONTENT PAGES
 	// ============================================================
-	// The Catalog is the root of the PDF
-	// It points to the Pages object
-	objectPositions[1] = pdf.Len()
-	pdf.WriteString("1 0 obj\n")
-	pdf.WriteString("<< /Type /Catalog /Pages 2 0 R >>\n")
-	pdf.WriteString("endobj\n\n")
+	contentPages := e.buildAllPages(report)
 
 	// ============================================================
-	// STEP 3: PAGES OBJECT (Object 2)
+	// CATALOG OBJECT
 	// ============================================================
-	// The Pages object lists all pages in the document
-	// We'll create multiple pages if needed
-	objectPositions[2] = pdf.Len()
-	pdf.WriteString("2 0 obj\n")
-	pdf.WriteString("<< /Type /Pages /Kids [3 0 R] /Count 1 ")
-	pdf.WriteString("/MediaBox [0 0 612 792] >>\n") // US Letter size
-	pdf.WriteString("endobj\n\n")
+	e.addObject(&pdf, fmt.Sprintf("<< /Type /Catalog /Pages 2 0 R >>"))
 
 	// ============================================================
-	// STEP 4: PAGE OBJECT (Object 3)
+	// PAGES OBJECT
 	// ============================================================
-	// This defines a single page
-	// It references the content (Object 4) and font (Object 5)
-	objectPositions[3] = pdf.Len()
-	pdf.WriteString("3 0 obj\n")
-	pdf.WriteString("<< /Type /Page /Parent 2 0 R ")
-	pdf.WriteString("/Contents 4 0 R ")
-	pdf.WriteString("/Resources << /Font << /F1 5 0 R >> >> >>\n")
-	pdf.WriteString("endobj\n\n")
+	// Build list of page references
+	pageRefs := ""
+	for i := 0; i < len(contentPages); i++ {
+		if i > 0 {
+			pageRefs += " "
+		}
+		pageRefs += fmt.Sprintf("%d 0 R", 3+i*3) // Page objects are 3, 6, 9, ...
+	}
+
+	e.addObject(&pdf, fmt.Sprintf(
+		"<< /Type /Pages /Kids [%s] /Count %d /MediaBox [0 0 612 792] >>",
+		pageRefs, len(contentPages)))
 
 	// ============================================================
-	// STEP 5: CONTENT STREAM (Object 4)
+	// CREATE PAGE OBJECTS
 	// ============================================================
-	// This is where we write the actual text content
-	// We'll build the content string first
-	content := e.buildPDFContent(report)
+	for i, content := range contentPages {
+		pageNum := 3 + i*3
+		contentNum := pageNum + 1
+		fontsNum := pageNum + 2
 
-	objectPositions[4] = pdf.Len()
-	pdf.WriteString("4 0 obj\n")
-	pdf.WriteString(fmt.Sprintf("<< /Length %d >>\n", len(content)))
-	pdf.WriteString("stream\n")
-	pdf.WriteString(content)
-	pdf.WriteString("\nendstream\n")
-	pdf.WriteString("endobj\n\n")
+		// Page object
+		e.addObject(&pdf, fmt.Sprintf(
+			"<< /Type /Page /Parent 2 0 R /Contents %d 0 R /Resources << /Font %d 0 R >> >>",
+			contentNum, fontsNum))
 
-	// ============================================================
-	// STEP 6: FONT OBJECT (Object 5)
-	// ============================================================
-	// Defines the font we'll use (Helvetica)
-	// Helvetica is a standard PDF font (always available)
-	objectPositions[5] = pdf.Len()
-	pdf.WriteString("5 0 obj\n")
-	pdf.WriteString("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\n")
-	pdf.WriteString("endobj\n\n")
+		// Content stream
+		e.addObject(&pdf, fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream",
+			len(content), content))
 
-	// ============================================================
-	// STEP 7: CROSS-REFERENCE TABLE
-	// ============================================================
-	// The xref table tells the PDF reader where each object is located
-	// This is like an index for the PDF
-	xrefStart := pdf.Len()
-	pdf.WriteString("xref\n")
-	pdf.WriteString("0 6\n")                 // 6 objects (0-5)
-	pdf.WriteString("0000000000 65535 f \n") // Object 0 is always free
-
-	// Write the position of each object
-	for i := 1; i <= 5; i++ {
-		pdf.WriteString(fmt.Sprintf("%010d 00000 n \n", objectPositions[i]))
+		// Font resources (multiple fonts for beautiful typography)
+		e.addObject(&pdf, `<< 
+			/F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+			/F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+			/F3 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>
+			/F4 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+		>>`)
 	}
 
 	// ============================================================
-	// STEP 8: TRAILER
+	// CROSS-REFERENCE TABLE
 	// ============================================================
-	// The trailer tells where to find the xref table and catalog
+	xrefStart := pdf.Len()
+	pdf.WriteString("xref\n")
+	pdf.WriteString(fmt.Sprintf("0 %d\n", len(e.objectOffsets)+1))
+	pdf.WriteString("0000000000 65535 f \n")
+	for _, offset := range e.objectOffsets {
+		pdf.WriteString(fmt.Sprintf("%010d 00000 n \n", offset))
+	}
+
+	// ============================================================
+	// TRAILER
+	// ============================================================
 	pdf.WriteString("\ntrailer\n")
-	pdf.WriteString("<< /Size 6 /Root 1 0 R >>\n")
+	pdf.WriteString(fmt.Sprintf("<< /Size %d /Root 1 0 R >>\n", len(e.objectOffsets)+1))
 	pdf.WriteString("startxref\n")
 	pdf.WriteString(fmt.Sprintf("%d\n", xrefStart))
 	pdf.WriteString("%%EOF\n")
 
-	// ============================================================
-	// STEP 9: WRITE TO FILE
-	// ============================================================
-	// Write the PDF content to disk
-	err := os.WriteFile(filename, []byte(pdf.String()), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write PDF file: %w", err)
-	}
-
-	return nil
+	// Write to file
+	return os.WriteFile(filename, []byte(pdf.String()), 0644)
 }
 
 // ============================================================
-// BUILD PDF CONTENT
+// ADD PDF OBJECT HELPER
 // ============================================================
-// buildPDFContent creates the text content for the PDF
-// This uses PDF's content stream syntax
-//
-// PDF Content Stream Commands:
-//
-//	BT    = Begin Text
-//	ET    = End Text
-//	Tf    = Set font and size
-//	Td    = Move to position
-//	Tj    = Show text
-//	TL    = Set leading (line spacing)
-//	T*    = Move to next line
-//
-// Parameters:
-//   - report: The report to format
-//
-// Returns:
-//   - string: PDF content stream
-func (e *PDFExporter) buildPDFContent(report *Report) string {
-	var content strings.Builder
+func (e *PDFExporter) addObject(pdf *strings.Builder, content string) {
+	e.objectNumber++
+	e.objectOffsets = append(e.objectOffsets, pdf.Len())
+	pdf.WriteString(fmt.Sprintf("%d 0 obj\n%s\nendobj\n\n", e.objectNumber, content))
+}
 
-	// Start text block
-	content.WriteString("BT\n")
+// ============================================================
+// BUILD ALL PAGES
+// ============================================================
+func (e *PDFExporter) buildAllPages(report *Report) []string {
+	var pages []string
+	var currentPage strings.Builder
 
-	// Set font: Helvetica Bold, 16 point
-	content.WriteString("/F1 16 Tf\n")
+	// ============================================================
+	// PAGE 1: HEADER + EXECUTIVE SUMMARY
+	// ============================================================
+	e.currentY = e.pageHeight - e.marginTop
 
-	// Position: X=50, Y=750 (coordinates from bottom-left)
-	// In PDF, (0,0) is bottom-left corner
-	// US Letter is 612x792 points
-	content.WriteString("50 750 Td\n")
+	// Draw blue header
+	e.addBlueHeader(&currentPage, report)
 
-	// Write title
-	content.WriteString("(BASICPANSCANNER SECURITY REPORT) Tj\n")
+	// Executive Summary Section
+	e.addExecutiveSummary(&currentPage, report)
 
-	// Set line spacing (leading) to 20 points
-	content.WriteString("20 TL\n")
+	// Start Statistics
+	e.addSectionHeader(&currentPage, "STATISTICS")
+	e.addStatisticsOverview(&currentPage, report)
 
-	// Move to next line
-	content.WriteString("T*\n")
+	// Check if we need new page
+	if e.currentY < 200 {
+		pages = append(pages, currentPage.String())
+		currentPage.Reset()
+		e.currentY = e.pageHeight - e.marginTop
+	}
 
-	// Change to smaller font for body text
-	content.WriteString("/F1 10 Tf\n")
-	content.WriteString("15 TL\n") // Smaller line spacing
+	// Card Distribution
+	e.addCardDistribution(&currentPage, report)
 
-	// Add scan information
-	content.WriteString("T*\n") // Blank line
-	content.WriteString(fmt.Sprintf("(Scan Date: %s) Tj\n",
-		e.escapeString(report.ScanDate.Format("2006-01-02 15:04:05"))))
-	content.WriteString("T*\n")
-	content.WriteString(fmt.Sprintf("(Directory: %s) Tj\n",
-		e.escapeString(report.Directory)))
-	content.WriteString("T*\n")
-	content.WriteString(fmt.Sprintf("(Duration: %s) Tj\n",
-		e.formatDuration(report.Duration)))
-	content.WriteString("T*\n")
-	content.WriteString(fmt.Sprintf("(Files Scanned: %d / %d) Tj\n",
-		report.ScannedFiles, report.TotalFiles))
+	// ============================================================
+	// PAGE 2: TOP FILES
+	// ============================================================
+	if e.currentY < 250 {
+		pages = append(pages, currentPage.String())
+		currentPage.Reset()
+		e.currentY = e.pageHeight - e.marginTop
+	}
 
-	// Add statistics
-	content.WriteString("T*\nT*\n")    // Two blank lines
-	content.WriteString("/F1 12 Tf\n") // Slightly larger for section header
-	content.WriteString("(STATISTICS) Tj\n")
-	content.WriteString("/F1 10 Tf\n") // Back to normal size
-	content.WriteString("T*\n")
+	e.addSectionHeader(&currentPage, "TOP FILES BY CARD COUNT")
+	e.addTopFiles(&currentPage, report)
 
-	// FIXED: Use correct field names
-	content.WriteString(fmt.Sprintf("(Total Cards Found: %d) Tj\n",
-		report.CardsFound))
-	content.WriteString("T*\n")
-	content.WriteString(fmt.Sprintf("(Affected Files: %d) Tj\n",
-		report.Statistics.FilesWithCards))
-	content.WriteString("T*\n")
-	content.WriteString(fmt.Sprintf("(High-Risk Files: %d) Tj\n",
-		report.Statistics.HighRiskFiles))
+	// ============================================================
+	// REMAINING PAGES: DETAILED FINDINGS
+	// ============================================================
+	if e.currentY < 200 {
+		pages = append(pages, currentPage.String())
+		currentPage.Reset()
+		e.currentY = e.pageHeight - e.marginTop
+	}
 
-	// Add card distribution
-	content.WriteString("T*\nT*\n")
-	content.WriteString("(Card Distribution:) Tj\n")
+	e.addSectionHeader(&currentPage, "DETAILED FINDINGS")
 
-	// Sort card types by count
+	// Add findings with automatic page breaks
+	fileCount := 0
+	for filePath, findings := range report.GroupedByFile {
+		// Check if we need new page
+		if e.currentY < 150 {
+			pages = append(pages, currentPage.String())
+			currentPage.Reset()
+			e.currentY = e.pageHeight - e.marginTop
+		}
+
+		e.addFileFindings(&currentPage, filePath, len(findings), fileCount)
+		fileCount++
+
+		// Limit to first 20 files to keep PDF reasonable
+		if fileCount >= 20 {
+			break
+		}
+	}
+
+	// Add footer to last page
+	e.addFooter(&currentPage)
+
+	// Add the last page
+	pages = append(pages, currentPage.String())
+
+	return pages
+}
+
+// ============================================================
+// DRAW BLUE HEADER (Like HTML report!)
+// ============================================================
+func (e *PDFExporter) addBlueHeader(page *strings.Builder, report *Report) {
+	// Blue color: RGB(52, 152, 219) -> PDF: 0.204 0.596 0.859
+	page.WriteString("q\n") // Save graphics state
+
+	// Draw blue rectangle
+	page.WriteString("0.204 0.596 0.859 rg\n")                         // Set fill color (blue)
+	page.WriteString(fmt.Sprintf("0 %f 612 70 re f\n", e.currentY-70)) // Rectangle
+
+	// White text
+	page.WriteString("1 1 1 rg\n") // White color
+	page.WriteString("BT\n")
+	page.WriteString("/F2 24 Tf\n") // Bold, 24pt
+	page.WriteString(fmt.Sprintf("100 %f Td\n", e.currentY-35))
+	page.WriteString("(BASICPANSCANNER) Tj\n")
+	page.WriteString("ET\n")
+
+	// Subtitle
+	page.WriteString("BT\n")
+	page.WriteString("/F1 12 Tf\n") // Regular, 12pt
+	page.WriteString(fmt.Sprintf("130 %f Td\n", e.currentY-52))
+	page.WriteString("(Security Report - Credit Card Discovery) Tj\n")
+	page.WriteString("ET\n")
+
+	// Version (small)
+	page.WriteString("BT\n")
+	page.WriteString("/F1 9 Tf\n")
+	page.WriteString(fmt.Sprintf("220 %f Td\n", e.currentY-65))
+	page.WriteString(fmt.Sprintf("(Version %s) Tj\n", e.escape(report.Version)))
+	page.WriteString("ET\n")
+
+	page.WriteString("Q\n") // Restore graphics state
+
+	e.currentY -= 90 // Move down past header
+}
+
+// ============================================================
+// EXECUTIVE SUMMARY BOX
+// ============================================================
+func (e *PDFExporter) addExecutiveSummary(page *strings.Builder, report *Report) {
+	// Light blue background box
+	page.WriteString("q\n")
+	page.WriteString("0.85 0.92 0.98 rg\n") // Light blue
+	page.WriteString(fmt.Sprintf("40 %f 532 100 re f\n", e.currentY-100))
+
+	// Border
+	page.WriteString("0.204 0.596 0.859 RG\n") // Blue border
+	page.WriteString("2 w\n")                  // 2pt width
+	page.WriteString(fmt.Sprintf("40 %f 532 100 re S\n", e.currentY-100))
+	page.WriteString("Q\n")
+
+	// Title
+	page.WriteString("BT\n")
+	page.WriteString("0.204 0.596 0.859 rg\n") // Blue text
+	page.WriteString("/F2 14 Tf\n")            // Bold
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY-25))
+	page.WriteString("(EXECUTIVE SUMMARY) Tj\n")
+	page.WriteString("ET\n")
+
+	// Content in black
+	page.WriteString("0 0 0 rg\n") // Black
+	y := e.currentY - 45
+
+	info := []struct {
+		label string
+		value string
+	}{
+		{"Scan Date:", report.ScanDate.Format("January 2, 2006 at 3:04 PM")},
+		{"Directory:", e.truncate(report.Directory, 60)},
+		{"Duration:", e.formatDuration(report.Duration)},
+		{"Files Scanned:", fmt.Sprintf("%d / %d (%.1f%%)", report.ScannedFiles, report.TotalFiles,
+			float64(report.ScannedFiles)/float64(report.TotalFiles)*100)},
+	}
+
+	for _, item := range info {
+		page.WriteString("BT\n")
+		page.WriteString("/F2 10 Tf\n") // Bold label
+		page.WriteString(fmt.Sprintf("50 %f Td\n", y))
+		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(item.label)))
+		page.WriteString("ET\n")
+
+		page.WriteString("BT\n")
+		page.WriteString("/F1 10 Tf\n") // Regular value
+		page.WriteString(fmt.Sprintf("140 %f Td\n", y))
+		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(item.value)))
+		page.WriteString("ET\n")
+
+		y -= 18
+	}
+
+	e.currentY -= 120
+}
+
+// ============================================================
+// SECTION HEADER (Blue background)
+// ============================================================
+func (e *PDFExporter) addSectionHeader(page *strings.Builder, title string) {
+	e.currentY -= 20
+
+	// Blue bar
+	page.WriteString("q\n")
+	page.WriteString("0.204 0.596 0.859 rg\n")
+	page.WriteString(fmt.Sprintf("40 %f 532 25 re f\n", e.currentY-25))
+	page.WriteString("Q\n")
+
+	// White text
+	page.WriteString("BT\n")
+	page.WriteString("1 1 1 rg\n")  // White
+	page.WriteString("/F2 12 Tf\n") // Bold
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY-17))
+	page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(title)))
+	page.WriteString("ET\n")
+
+	e.currentY -= 35
+}
+
+// ============================================================
+// STATISTICS OVERVIEW (Colored boxes)
+// ============================================================
+func (e *PDFExporter) addStatisticsOverview(page *strings.Builder, report *Report) {
+	stats := []struct {
+		label string
+		value string
+		color string // RGB in PDF format
+	}{
+		{"Total Cards Found", fmt.Sprintf("%d", report.CardsFound), "0.9 0.3 0.3"},               // Red
+		{"Files With Cards", fmt.Sprintf("%d", report.Statistics.FilesWithCards), "0.2 0.7 0.9"}, // Blue
+		{"High-Risk Files", fmt.Sprintf("%d", report.Statistics.HighRiskFiles), "0.8 0.2 0.2"},   // Dark red
+	}
+
+	x := 50.0
+	for _, stat := range stats {
+		// Colored box
+		page.WriteString("q\n")
+		page.WriteString(fmt.Sprintf("%s rg\n", stat.color))
+		page.WriteString(fmt.Sprintf("%f %f 160 50 re f\n", x, e.currentY-50))
+		page.WriteString("Q\n")
+
+		// White text - Value (large)
+		page.WriteString("BT\n")
+		page.WriteString("1 1 1 rg\n")
+		page.WriteString("/F2 20 Tf\n")
+		page.WriteString(fmt.Sprintf("%f %f Td\n", x+10, e.currentY-30))
+		page.WriteString(fmt.Sprintf("(%s) Tj\n", stat.value))
+		page.WriteString("ET\n")
+
+		// White text - Label (small)
+		page.WriteString("BT\n")
+		page.WriteString("1 1 1 rg\n")
+		page.WriteString("/F1 9 Tf\n")
+		page.WriteString(fmt.Sprintf("%f %f Td\n", x+10, e.currentY-45))
+		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(stat.label)))
+		page.WriteString("ET\n")
+
+		x += 175
+	}
+
+	e.currentY -= 70
+}
+
+// ============================================================
+// CARD DISTRIBUTION (with visual bars)
+// ============================================================
+func (e *PDFExporter) addCardDistribution(page *strings.Builder, report *Report) {
+	e.currentY -= 15
+
+	// Title
+	page.WriteString("BT\n")
+	page.WriteString("0 0 0 rg\n")
+	page.WriteString("/F2 11 Tf\n")
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
+	page.WriteString("(Card Distribution by Type) Tj\n")
+	page.WriteString("ET\n")
+
+	e.currentY -= 25
+
+	// Sort cards by count
 	type cardCount struct {
-		cardType string
-		count    int
+		name  string
+		count int
 	}
-	var cardCounts []cardCount
-	for cardType, count := range report.Statistics.CardsByType {
-		cardCounts = append(cardCounts, cardCount{cardType, count})
+	var cards []cardCount
+	for name, count := range report.Statistics.CardsByType {
+		cards = append(cards, cardCount{name, count})
 	}
-	// Simple sort (bubble sort)
-	for i := 0; i < len(cardCounts); i++ {
-		for j := i + 1; j < len(cardCounts); j++ {
-			if cardCounts[j].count > cardCounts[i].count {
-				cardCounts[i], cardCounts[j] = cardCounts[j], cardCounts[i]
+	// Bubble sort
+	for i := 0; i < len(cards); i++ {
+		for j := i + 1; j < len(cards); j++ {
+			if cards[j].count > cards[i].count {
+				cards[i], cards[j] = cards[j], cards[i]
 			}
 		}
 	}
 
-	for _, cc := range cardCounts {
-		content.WriteString("T*\n")
-		content.WriteString(fmt.Sprintf("(  %s: %d cards) Tj\n",
-			e.escapeString(cc.cardType), cc.count))
+	// Draw each card type with colored bar
+	maxCount := 0
+	if len(cards) > 0 {
+		maxCount = cards[0].count
 	}
 
-	// Add top files section
-	content.WriteString("T*\nT*\n")
-	content.WriteString("/F1 12 Tf\n")
-	content.WriteString("(TOP FILES) Tj\n")
-	content.WriteString("/F1 10 Tf\n")
-	content.WriteString("T*\n")
+	for _, card := range cards {
+		// Card name
+		page.WriteString("BT\n")
+		page.WriteString("0 0 0 rg\n")
+		page.WriteString("/F2 10 Tf\n")
+		page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
+		page.WriteString(fmt.Sprintf("(%s:) Tj\n", e.escape(card.name)))
+		page.WriteString("ET\n")
 
-	// Limit to first 5 files (simple PDF - limited space)
-	maxFiles := 5
+		// Count
+		page.WriteString("BT\n")
+		page.WriteString("/F1 10 Tf\n")
+		page.WriteString(fmt.Sprintf("180 %f Td\n", e.currentY))
+		page.WriteString(fmt.Sprintf("(%d cards) Tj\n", card.count))
+		page.WriteString("ET\n")
+
+		// Visual bar (blue)
+		barWidth := 250.0
+		if maxCount > 0 {
+			barWidth = (float64(card.count) / float64(maxCount)) * 250.0
+		}
+		page.WriteString("q\n")
+		page.WriteString("0.204 0.596 0.859 rg\n")
+		page.WriteString(fmt.Sprintf("250 %f %f 12 re f\n", e.currentY-2, barWidth))
+		page.WriteString("Q\n")
+
+		e.currentY -= 20
+	}
+}
+
+// ============================================================
+// TOP FILES
+// ============================================================
+func (e *PDFExporter) addTopFiles(page *strings.Builder, report *Report) {
+	if len(report.Statistics.TopFiles) == 0 {
+		page.WriteString("BT\n")
+		page.WriteString("0 0 0 rg\n")
+		page.WriteString("/F3 10 Tf\n") // Italic
+		page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
+		page.WriteString("(No files with cards found.) Tj\n")
+		page.WriteString("ET\n")
+		e.currentY -= 30
+		return
+	}
+
+	maxFiles := 10
 	if len(report.Statistics.TopFiles) < maxFiles {
 		maxFiles = len(report.Statistics.TopFiles)
 	}
 
 	for i := 0; i < maxFiles; i++ {
-		fileStats := report.Statistics.TopFiles[i]
-		content.WriteString("T*\n")
-		// FIXED: Use FilePath instead of Filename
-		content.WriteString(fmt.Sprintf("(%d. %s - %d cards) Tj\n",
-			i+1,
-			e.escapeString(e.truncateString(fileStats.FilePath, 50)),
-			fileStats.CardCount))
-	}
+		fs := report.Statistics.TopFiles[i]
 
-	// Add findings summary
-	content.WriteString("T*\nT*\n")
-	content.WriteString("/F1 12 Tf\n")
-	content.WriteString("(DETAILED FINDINGS) Tj\n")
-	content.WriteString("/F1 10 Tf\n")
-	content.WriteString("T*\n")
-
-	// FIXED: Use GroupedByFile instead of GroupedFindings
-	if len(report.GroupedByFile) == 0 {
-		content.WriteString("(No credit cards found.) Tj\n")
-	} else {
-		content.WriteString(fmt.Sprintf("(Found cards in %d files - see full report for details) Tj\n",
-			len(report.GroupedByFile)))
-
-		// Show first few files as examples (space limited in simple PDF)
-		maxFindings := 3
-		fileCount := 0
-
-		// FIXED: Iterate over GroupedByFile map
-		for filePath, findings := range report.GroupedByFile {
-			if fileCount >= maxFindings {
-				break
-			}
-
-			content.WriteString("T*\n")
-			content.WriteString(fmt.Sprintf("(File: %s) Tj\n",
-				e.escapeString(e.truncateString(filePath, 50))))
-			content.WriteString("T*\n")
-			content.WriteString(fmt.Sprintf("(  Cards: %d) Tj\n",
-				len(findings)))
-
-			fileCount++
+		// Risk indicator (colored circle)
+		color := "0.2 0.8 0.2" // Green
+		if fs.CardCount >= 5 {
+			color = "0.9 0.2 0.2" // Red
+		} else if fs.CardCount >= 2 {
+			color = "0.9 0.7 0.2" // Yellow
 		}
+
+		// Draw circle
+		page.WriteString("q\n")
+		page.WriteString(fmt.Sprintf("%s rg\n", color))
+		page.WriteString(fmt.Sprintf("50 %f 5 0 360 arc f\n", e.currentY-3))
+		page.WriteString("Q\n")
+
+		// File number and name
+		page.WriteString("BT\n")
+		page.WriteString("0 0 0 rg\n")
+		page.WriteString("/F2 10 Tf\n")
+		page.WriteString(fmt.Sprintf("65 %f Td\n", e.currentY))
+		page.WriteString(fmt.Sprintf("(%d. %s) Tj\n", i+1, e.escape(e.truncate(fs.FilePath, 55))))
+		page.WriteString("ET\n")
+
+		// Card count (right aligned)
+		page.WriteString("BT\n")
+		page.WriteString("/F1 10 Tf\n")
+		page.WriteString(fmt.Sprintf("520 %f Td\n", e.currentY))
+		page.WriteString(fmt.Sprintf("(%d cards) Tj\n", fs.CardCount))
+		page.WriteString("ET\n")
+
+		e.currentY -= 18
 	}
 
-	// Add footer
-	content.WriteString("T*\nT*\nT*\n")
-	content.WriteString("/F1 8 Tf\n") // Small font for footer
-	content.WriteString(fmt.Sprintf("(Generated: %s) Tj\n",
-		time.Now().Format("2006-01-02 15:04:05 MST")))
+	e.currentY -= 10
+}
 
-	// End text block
-	content.WriteString("ET\n")
+// ============================================================
+// FILE FINDINGS (Detailed)
+// ============================================================
+// Note: We don't need to know the Finding structure details
+// We only need to count them, so we use interface{} for flexibility
+func (e *PDFExporter) addFileFindings(page *strings.Builder, filePath string, findingsCount int, index int) {
+	// Gray box background
+	page.WriteString("q\n")
+	page.WriteString("0.95 0.95 0.95 rg\n")
+	page.WriteString(fmt.Sprintf("40 %f 532 30 re f\n", e.currentY-30))
+	page.WriteString("Q\n")
 
-	return content.String()
+	// File number and path
+	page.WriteString("BT\n")
+	page.WriteString("0 0 0 rg\n")
+	page.WriteString("/F2 10 Tf\n")
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY-18))
+	page.WriteString(fmt.Sprintf("(File %d: %s) Tj\n", index+1, e.escape(e.truncate(filePath, 70))))
+	page.WriteString("ET\n")
+
+	e.currentY -= 40
+
+	// Cards count
+	page.WriteString("BT\n")
+	page.WriteString("0.3 0.3 0.3 rg\n")
+	page.WriteString("/F1 9 Tf\n")
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
+	page.WriteString(fmt.Sprintf("(Cards found: %d) Tj\n", findingsCount))
+	page.WriteString("ET\n")
+
+	e.currentY -= 25
+}
+
+// ============================================================
+// FOOTER
+// ============================================================
+func (e *PDFExporter) addFooter(page *strings.Builder) {
+	page.WriteString("BT\n")
+	page.WriteString("0.5 0.5 0.5 rg\n") // Gray
+	page.WriteString("/F3 8 Tf\n")       // Italic, small
+	page.WriteString(fmt.Sprintf("50 30 Td\n"))
+	page.WriteString(fmt.Sprintf("(Generated: %s) Tj\n",
+		e.escape(time.Now().Format("January 2, 2006 at 3:04 PM MST"))))
+	page.WriteString("ET\n")
 }
 
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
 
-// escapeString escapes special characters for PDF
-// PDF strings use () to delimit, so we need to escape those
-//
-// Parameters:
-//   - s: String to escape
-//
-// Returns:
-//   - string: Escaped string safe for PDF
-func (e *PDFExporter) escapeString(s string) string {
-	// Replace special characters that break PDF syntax
-	s = strings.ReplaceAll(s, "\\", "\\\\") // Backslash must be first!
-	s = strings.ReplaceAll(s, "(", "\\(")   // Left paren
-	s = strings.ReplaceAll(s, ")", "\\)")   // Right paren
-	s = strings.ReplaceAll(s, "\r", "\\r")  // Carriage return
-	s = strings.ReplaceAll(s, "\n", "\\n")  // Newline
-
+func (e *PDFExporter) escape(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "(", "\\(")
+	s = strings.ReplaceAll(s, ")", "\\)")
+	s = strings.ReplaceAll(s, "\r", "\\r")
+	s = strings.ReplaceAll(s, "\n", " ")
 	return s
 }
 
-// truncateString limits string length
-// Prevents text from running off the page
-//
-// Parameters:
-//   - s: String to truncate
-//   - maxLen: Maximum length
-//
-// Returns:
-//   - string: Truncated string
-func (e *PDFExporter) truncateString(s string, maxLen int) string {
+func (e *PDFExporter) truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
 	return s[:maxLen-3] + "..."
 }
 
-// formatDuration formats duration nicely
-// Converts time.Duration to readable string
-//
-// Parameters:
-//   - d: Duration to format
-//
-// Returns:
-//   - string: Formatted duration
 func (e *PDFExporter) formatDuration(d time.Duration) string {
 	if d < time.Second {
 		return fmt.Sprintf("%dms", d.Milliseconds())
