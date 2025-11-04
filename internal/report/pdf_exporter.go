@@ -1,5 +1,5 @@
-// Package report - ULTRA BEAUTIFUL PDF Exporter (NO EXTERNAL LIBRARIES!)
-// Maximum visual appeal with professional design - using ONLY Go standard library
+// Package report - Beautiful Native PDF exporter (NO EXTERNAL LIBRARIES!)
+// Creates professional, colorful PDFs using only GO standard library
 package report
 
 import (
@@ -10,41 +10,36 @@ import (
 )
 
 // ============================================================
-// ULTRA BEAUTIFUL PDF EXPORTER
+// BEAUTIFUL PDF EXPORTER - ZERO DEPENDENCIES!
 // ============================================================
+// This creates professional PDFs similar to HTML reports
 // Features:
-//   ✨ Gradient-style headers
-//   ✨ Unicode icons and symbols
-//   ✨ Visual charts and graphs
-//   ✨ Professional color schemes
-//   ✨ Page numbers and footers
-//   ✨ Risk level badges
-//   ✨ Beautiful typography
-//   ✨ Card type icons
-//   ✨ Shadow effects (simulated)
-//   ✨ Table of contents
-//   ✨ Executive dashboard
-//   ✨ ALL using only GO standard library!
+//   ✅ Colors (blue header, colored sections)
+//   ✅ Multiple pages with automatic page breaks
+//   ✅ Multiple fonts (Helvetica, Bold, Italic)
+//   ✅ Boxes and borders
+//   ✅ Professional layout
+//   ✅ Beautiful typography
+//   ✅ ALL using only GO standard library!
 
 type PDFExporter struct {
-	currentY      float64
-	pageHeight    float64
-	marginTop     float64
-	marginBottom  float64
-	pageNumber    int
-	objectNumber  int
-	objects       []string
-	objectOffsets []int
-	totalPages    int // For page numbering
+	currentY      float64  // Current Y position on page
+	pageHeight    float64  // Page height in points
+	marginTop     float64  // Top margin
+	marginBottom  float64  // Bottom margin
+	pageNumber    int      // Current page number
+	objectNumber  int      // Current PDF object number
+	objects       []string // PDF objects
+	objectOffsets []int    // Object byte offsets
 }
 
 // ============================================================
 // MAIN EXPORT FUNCTION
 // ============================================================
 func (e *PDFExporter) Export(report *Report, filename string) error {
-	// Initialize
-	e.pageHeight = 792
-	e.marginTop = 40
+	// Initialize PDF state
+	e.pageHeight = 792 // US Letter height
+	e.marginTop = 50
 	e.marginBottom = 50
 	e.currentY = e.pageHeight - e.marginTop
 	e.pageNumber = 1
@@ -54,50 +49,67 @@ func (e *PDFExporter) Export(report *Report, filename string) error {
 
 	var pdf strings.Builder
 
-	// PDF Header
-	pdf.WriteString("%PDF-1.4\n%âãÏÓ\n\n")
+	// ============================================================
+	// PDF HEADER
+	// ============================================================
+	pdf.WriteString("%PDF-1.4\n")
+	pdf.WriteString("%âãÏÓ\n\n")
 
-	// Create all pages
+	// ============================================================
+	// CREATE ALL CONTENT PAGES
+	// ============================================================
 	contentPages := e.buildAllPages(report)
-	e.totalPages = len(contentPages)
 
-	// Catalog
-	e.addObject(&pdf, "<< /Type /Catalog /Pages 2 0 R >>")
+	// ============================================================
+	// CATALOG OBJECT
+	// ============================================================
+	e.addObject(&pdf, fmt.Sprintf("<< /Type /Catalog /Pages 2 0 R >>"))
 
-	// Pages collection
+	// ============================================================
+	// PAGES OBJECT
+	// ============================================================
+	// Build list of page references
 	pageRefs := ""
 	for i := 0; i < len(contentPages); i++ {
 		if i > 0 {
 			pageRefs += " "
 		}
-		pageRefs += fmt.Sprintf("%d 0 R", 3+i*3)
+		pageRefs += fmt.Sprintf("%d 0 R", 3+i*3) // Page objects are 3, 6, 9, ...
 	}
+
 	e.addObject(&pdf, fmt.Sprintf(
 		"<< /Type /Pages /Kids [%s] /Count %d /MediaBox [0 0 612 792] >>",
 		pageRefs, len(contentPages)))
 
-	// Create page objects
+	// ============================================================
+	// CREATE PAGE OBJECTS
+	// ============================================================
 	for i, content := range contentPages {
 		pageNum := 3 + i*3
 		contentNum := pageNum + 1
 		fontsNum := pageNum + 2
 
+		// Page object
 		e.addObject(&pdf, fmt.Sprintf(
 			"<< /Type /Page /Parent 2 0 R /Contents %d 0 R /Resources << /Font %d 0 R >> >>",
 			contentNum, fontsNum))
 
+		// Content stream
 		e.addObject(&pdf, fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream",
 			len(content), content))
 
+		// Font resources (multiple fonts for beautiful typography)
 		e.addObject(&pdf, `<< 
 			/F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 			/F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
 			/F3 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>
-			/F4 << /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+			/F4 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
 		>>`)
 	}
 
-	// Cross-reference table
+	// ============================================================
+	// CROSS-REFERENCE TABLE
+	// ============================================================
 	xrefStart := pdf.Len()
 	pdf.WriteString("xref\n")
 	pdf.WriteString(fmt.Sprintf("0 %d\n", len(e.objectOffsets)+1))
@@ -106,16 +118,22 @@ func (e *PDFExporter) Export(report *Report, filename string) error {
 		pdf.WriteString(fmt.Sprintf("%010d 00000 n \n", offset))
 	}
 
-	// Trailer
+	// ============================================================
+	// TRAILER
+	// ============================================================
 	pdf.WriteString("\ntrailer\n")
 	pdf.WriteString(fmt.Sprintf("<< /Size %d /Root 1 0 R >>\n", len(e.objectOffsets)+1))
 	pdf.WriteString("startxref\n")
 	pdf.WriteString(fmt.Sprintf("%d\n", xrefStart))
 	pdf.WriteString("%%EOF\n")
 
+	// Write to file
 	return os.WriteFile(filename, []byte(pdf.String()), 0644)
 }
 
+// ============================================================
+// ADD PDF OBJECT HELPER
+// ============================================================
 func (e *PDFExporter) addObject(pdf *strings.Builder, content string) {
 	e.objectNumber++
 	e.objectOffsets = append(e.objectOffsets, pdf.Len())
@@ -129,363 +147,261 @@ func (e *PDFExporter) buildAllPages(report *Report) []string {
 	var pages []string
 	var currentPage strings.Builder
 
+	// ============================================================
+	// PAGE 1: HEADER + EXECUTIVE SUMMARY
+	// ============================================================
 	e.currentY = e.pageHeight - e.marginTop
 
-	// ============================================================
-	// PAGE 1: COVER PAGE WITH GRADIENT HEADER
-	// ============================================================
-	e.addGradientHeader(&currentPage, report)
-	e.addExecutiveDashboard(&currentPage, report)
-	e.addPageNumber(&currentPage, 1)
+	// Draw blue header
+	e.addBlueHeader(&currentPage, report)
 
-	pages = append(pages, currentPage.String())
-	currentPage.Reset()
-	e.currentY = e.pageHeight - e.marginTop
+	// Executive Summary Section
+	e.addExecutiveSummary(&currentPage, report)
 
-	// ============================================================
-	// PAGE 2: DETAILED STATISTICS
-	// ============================================================
-	e.addStatsHeader(&currentPage, "DETAILED STATISTICS")
-	e.addStatisticsCards(&currentPage, report)
-	e.addCardDistributionChart(&currentPage, report)
-	e.addFileTypeDistribution(&currentPage, report)
-	e.addPageNumber(&currentPage, 2)
+	// Start Statistics
+	e.addSectionHeader(&currentPage, "STATISTICS")
+	e.addStatisticsOverview(&currentPage, report)
 
-	pages = append(pages, currentPage.String())
-	currentPage.Reset()
-	e.currentY = e.pageHeight - e.marginTop
-
-	// ============================================================
-	// PAGE 3+: TOP FILES WITH RISK BADGES
-	// ============================================================
-	e.addStatsHeader(&currentPage, "TOP FILES ANALYSIS")
-	e.addTopFilesDetailed(&currentPage, report)
-
+	// Check if we need new page
 	if e.currentY < 200 {
-		e.addPageNumber(&currentPage, 3)
 		pages = append(pages, currentPage.String())
 		currentPage.Reset()
 		e.currentY = e.pageHeight - e.marginTop
 	}
 
+	// Card Distribution
+	e.addCardDistribution(&currentPage, report)
+
+	// ============================================================
+	// PAGE 2: TOP FILES
+	// ============================================================
+	if e.currentY < 250 {
+		pages = append(pages, currentPage.String())
+		currentPage.Reset()
+		e.currentY = e.pageHeight - e.marginTop
+	}
+
+	e.addSectionHeader(&currentPage, "TOP FILES BY CARD COUNT")
+	e.addTopFiles(&currentPage, report)
+
 	// ============================================================
 	// REMAINING PAGES: DETAILED FINDINGS
 	// ============================================================
-	pageNum := len(pages) + 1
-	e.addStatsHeader(&currentPage, "DETAILED FINDINGS")
+	if e.currentY < 200 {
+		pages = append(pages, currentPage.String())
+		currentPage.Reset()
+		e.currentY = e.pageHeight - e.marginTop
+	}
 
+	e.addSectionHeader(&currentPage, "DETAILED FINDINGS")
+
+	// Add findings with automatic page breaks
 	fileCount := 0
 	for filePath, findings := range report.GroupedByFile {
-		if e.currentY < 120 {
-			e.addPageNumber(&currentPage, pageNum)
+		// Check if we need new page
+		if e.currentY < 150 {
 			pages = append(pages, currentPage.String())
 			currentPage.Reset()
 			e.currentY = e.pageHeight - e.marginTop
-			pageNum++
 		}
 
-		e.addFileCard(&currentPage, filePath, len(findings), fileCount, report)
+		e.addFileFindings(&currentPage, filePath, len(findings), fileCount)
 		fileCount++
 
-		if fileCount >= 15 {
+		// Limit to first 20 files to keep PDF reasonable
+		if fileCount >= 20 {
 			break
 		}
 	}
 
-	// Final page with footer
-	e.addFinalFooter(&currentPage)
-	e.addPageNumber(&currentPage, pageNum)
+	// Add footer to last page
+	e.addFooter(&currentPage)
+
+	// Add the last page
 	pages = append(pages, currentPage.String())
 
 	return pages
 }
 
 // ============================================================
-// GRADIENT HEADER (Simulated with color bands)
+// DRAW BLUE HEADER (Like HTML report!)
 // ============================================================
-func (e *PDFExporter) addGradientHeader(page *strings.Builder, report *Report) {
-	// Create gradient effect with multiple color bands
-	colors := []string{
-		"0.12 0.47 0.71", // Dark blue
-		"0.16 0.50 0.73",
-		"0.20 0.60 0.86", // Main blue
-		"0.24 0.63 0.88",
-		"0.28 0.67 0.90", // Light blue
-	}
+func (e *PDFExporter) addBlueHeader(page *strings.Builder, report *Report) {
+	// Blue color: RGB(52, 152, 219) -> PDF: 0.204 0.596 0.859
+	page.WriteString("q\n") // Save graphics state
 
-	bandHeight := 16.0
-	for i, color := range colors {
-		page.WriteString("q\n")
-		page.WriteString(fmt.Sprintf("%s rg\n", color))
-		y := e.currentY - float64(i)*bandHeight
-		page.WriteString(fmt.Sprintf("0 %f 612 %f re f\n", y-bandHeight, bandHeight))
-		page.WriteString("Q\n")
-	}
+	// Draw blue rectangle
+	page.WriteString("0.204 0.596 0.859 rg\n")                         // Set fill color (blue)
+	page.WriteString(fmt.Sprintf("0 %f 612 70 re f\n", e.currentY-70)) // Rectangle
 
-	// White text with shadow effect
-	// Shadow (gray, slightly offset)
+	// White text
+	page.WriteString("1 1 1 rg\n") // White color
 	page.WriteString("BT\n")
-	page.WriteString("0.3 0.3 0.3 rg\n")
-	page.WriteString("/F2 28 Tf\n")
-	page.WriteString(fmt.Sprintf("72 %f Td\n", e.currentY-47))
+	page.WriteString("/F2 24 Tf\n") // Bold, 24pt
+	page.WriteString(fmt.Sprintf("100 %f Td\n", e.currentY-35))
 	page.WriteString("(BASICPANSCANNER) Tj\n")
 	page.WriteString("ET\n")
 
-	// Main text (white)
+	// Subtitle
 	page.WriteString("BT\n")
-	page.WriteString("1 1 1 rg\n")
-	page.WriteString("/F2 28 Tf\n")
-	page.WriteString(fmt.Sprintf("70 %f Td\n", e.currentY-45))
-	page.WriteString("(BASICPANSCANNER) Tj\n")
+	page.WriteString("/F1 12 Tf\n") // Regular, 12pt
+	page.WriteString(fmt.Sprintf("130 %f Td\n", e.currentY-52))
+	page.WriteString("(Security Report - Credit Card Discovery) Tj\n")
 	page.WriteString("ET\n")
 
-	// Subtitle with icon
+	// Version (small)
 	page.WriteString("BT\n")
-	page.WriteString("1 1 1 rg\n")
-	page.WriteString("/F1 13 Tf\n")
-	page.WriteString(fmt.Sprintf("70 %f Td\n", e.currentY-63))
-	page.WriteString("(\\u25C6 Credit Card Security Assessment Report) Tj\n")
+	page.WriteString("/F1 9 Tf\n")
+	page.WriteString(fmt.Sprintf("220 %f Td\n", e.currentY-65))
+	page.WriteString(fmt.Sprintf("(Version %s) Tj\n", e.escape(report.Version)))
 	page.WriteString("ET\n")
 
-	// Version badge (right side)
-	page.WriteString("q\n")
-	page.WriteString("0.9 0.9 0.9 rg\n")
-	page.WriteString(fmt.Sprintf("490 %f 80 18 re f\n", e.currentY-50))
-	page.WriteString("0.2 0.6 0.9 RG\n")
-	page.WriteString("1.5 w\n")
-	page.WriteString(fmt.Sprintf("490 %f 80 18 re S\n", e.currentY-50))
-	page.WriteString("Q\n")
+	page.WriteString("Q\n") // Restore graphics state
 
-	page.WriteString("BT\n")
-	page.WriteString("0.2 0.6 0.9 rg\n")
-	page.WriteString("/F2 9 Tf\n")
-	page.WriteString(fmt.Sprintf("510 %f Td\n", e.currentY-44))
-	page.WriteString(fmt.Sprintf("(v%s) Tj\n", e.escape(report.Version)))
-	page.WriteString("ET\n")
-
-	e.currentY -= 100
+	e.currentY -= 90 // Move down past header
 }
 
 // ============================================================
-// EXECUTIVE DASHBOARD (Cards with icons)
+// EXECUTIVE SUMMARY BOX
 // ============================================================
-func (e *PDFExporter) addExecutiveDashboard(page *strings.Builder, report *Report) {
-	// Section title with icon
-	page.WriteString("BT\n")
-	page.WriteString("0.2 0.2 0.2 rg\n")
-	page.WriteString("/F2 16 Tf\n")
-	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
-	page.WriteString("(\\u25BA EXECUTIVE DASHBOARD) Tj\n")
-	page.WriteString("ET\n")
-
-	e.currentY -= 30
-
-	// Dashboard cards with icons and colors
-	cards := []struct {
-		icon  string
-		label string
-		value string
-		color string
-		x     float64
-	}{
-		{"\\u2637", "Scan Duration", e.formatDuration(report.Duration), "0.4 0.6 0.9", 50},
-		{"\\u2713", "Files Scanned", fmt.Sprintf("%d/%d", report.ScannedFiles, report.TotalFiles), "0.3 0.7 0.4", 210},
-		{"\\u26A0", "Cards Found", fmt.Sprintf("%d", report.CardsFound), "0.9 0.4 0.3", 370},
-	}
-
-	for _, card := range cards {
-		// Card background with rounded effect
-		page.WriteString("q\n")
-		page.WriteString(fmt.Sprintf("%s rg\n", card.color))
-		page.WriteString(fmt.Sprintf("%f %f 145 70 re f\n", card.x, e.currentY-70))
-
-		// Lighter overlay for depth
-		page.WriteString(fmt.Sprintf("%s rg\n", card.color))
-		page.WriteString("0.9 0.9 0.9 rg\n")
-		page.WriteString(fmt.Sprintf("%f %f 145 20 re f\n", card.x, e.currentY-20))
-		page.WriteString("Q\n")
-
-		// Icon (large, white)
-		page.WriteString("BT\n")
-		page.WriteString("1 1 1 rg\n")
-		page.WriteString("/F2 24 Tf\n")
-		page.WriteString(fmt.Sprintf("%f %f Td\n", card.x+10, e.currentY-45))
-		page.WriteString(fmt.Sprintf("(%s) Tj\n", card.icon))
-		page.WriteString("ET\n")
-
-		// Value (large, white)
-		page.WriteString("BT\n")
-		page.WriteString("1 1 1 rg\n")
-		page.WriteString("/F2 16 Tf\n")
-		page.WriteString(fmt.Sprintf("%f %f Td\n", card.x+50, e.currentY-42))
-		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(card.value)))
-		page.WriteString("ET\n")
-
-		// Label (small, on overlay)
-		page.WriteString("BT\n")
-		page.WriteString(fmt.Sprintf("%s rg\n", card.color))
-		page.WriteString("/F2 8 Tf\n")
-		page.WriteString(fmt.Sprintf("%f %f Td\n", card.x+10, e.currentY-13))
-		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(card.label)))
-		page.WriteString("ET\n")
-	}
-
-	e.currentY -= 90
-
-	// Scan information box
-	e.addInfoBox(page, report)
-}
-
-// ============================================================
-// INFO BOX (Professional details)
-// ============================================================
-func (e *PDFExporter) addInfoBox(page *strings.Builder, report *Report) {
-	// Light blue background
+func (e *PDFExporter) addExecutiveSummary(page *strings.Builder, report *Report) {
+	// Light blue background box
 	page.WriteString("q\n")
-	page.WriteString("0.94 0.97 0.99 rg\n")
-	page.WriteString(fmt.Sprintf("50 %f 512 85 re f\n", e.currentY-85))
+	page.WriteString("0.85 0.92 0.98 rg\n") // Light blue
+	page.WriteString(fmt.Sprintf("40 %f 532 100 re f\n", e.currentY-100))
 
-	// Blue border
-	page.WriteString("0.2 0.6 0.9 RG\n")
-	page.WriteString("1 w\n")
-	page.WriteString(fmt.Sprintf("50 %f 512 85 re S\n", e.currentY-85))
+	// Border
+	page.WriteString("0.204 0.596 0.859 RG\n") // Blue border
+	page.WriteString("2 w\n")                  // 2pt width
+	page.WriteString(fmt.Sprintf("40 %f 532 100 re S\n", e.currentY-100))
 	page.WriteString("Q\n")
 
 	// Title
 	page.WriteString("BT\n")
-	page.WriteString("0.2 0.6 0.9 rg\n")
-	page.WriteString("/F2 11 Tf\n")
-	page.WriteString(fmt.Sprintf("60 %f Td\n", e.currentY-20))
-	page.WriteString("(SCAN INFORMATION) Tj\n")
+	page.WriteString("0.204 0.596 0.859 rg\n") // Blue text
+	page.WriteString("/F2 14 Tf\n")            // Bold
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY-25))
+	page.WriteString("(EXECUTIVE SUMMARY) Tj\n")
 	page.WriteString("ET\n")
 
-	// Information with icons
+	// Content in black
+	page.WriteString("0 0 0 rg\n") // Black
+	y := e.currentY - 45
+
 	info := []struct {
-		icon  string
 		label string
 		value string
 	}{
-		{"\\u25C9", "Date", report.ScanDate.Format("January 2, 2006 at 3:04 PM")},
-		{"\\u25C9", "Directory", e.truncate(report.Directory, 55)},
-		{"\\u25C9", "Mode", report.ScanMode},
+		{"Scan Date:", report.ScanDate.Format("January 2, 2006 at 3:04 PM")},
+		{"Directory:", e.truncate(report.Directory, 60)},
+		{"Duration:", e.formatDuration(report.Duration)},
+		{"Files Scanned:", fmt.Sprintf("%d / %d (%.1f%%)", report.ScannedFiles, report.TotalFiles,
+			float64(report.ScannedFiles)/float64(report.TotalFiles)*100)},
 	}
 
-	y := e.currentY - 38
 	for _, item := range info {
-		// Icon
 		page.WriteString("BT\n")
-		page.WriteString("0.2 0.6 0.9 rg\n")
-		page.WriteString("/F1 10 Tf\n")
-		page.WriteString(fmt.Sprintf("60 %f Td\n", y))
-		page.WriteString(fmt.Sprintf("(%s) Tj\n", item.icon))
+		page.WriteString("/F2 10 Tf\n") // Bold label
+		page.WriteString(fmt.Sprintf("50 %f Td\n", y))
+		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(item.label)))
 		page.WriteString("ET\n")
 
-		// Label (bold)
 		page.WriteString("BT\n")
-		page.WriteString("0.2 0.2 0.2 rg\n")
-		page.WriteString("/F2 9 Tf\n")
-		page.WriteString(fmt.Sprintf("75 %f Td\n", y))
-		page.WriteString(fmt.Sprintf("(%s:) Tj\n", e.escape(item.label)))
-		page.WriteString("ET\n")
-
-		// Value
-		page.WriteString("BT\n")
-		page.WriteString("0.3 0.3 0.3 rg\n")
-		page.WriteString("/F1 9 Tf\n")
+		page.WriteString("/F1 10 Tf\n") // Regular value
 		page.WriteString(fmt.Sprintf("140 %f Td\n", y))
 		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(item.value)))
 		page.WriteString("ET\n")
 
-		y -= 15
+		y -= 18
 	}
 
-	e.currentY -= 105
+	e.currentY -= 120
 }
 
 // ============================================================
-// STATISTICS CARDS (Beautiful colored cards)
+// SECTION HEADER (Blue background)
 // ============================================================
-func (e *PDFExporter) addStatisticsCards(page *strings.Builder, report *Report) {
-	e.currentY -= 10
+func (e *PDFExporter) addSectionHeader(page *strings.Builder, title string) {
+	e.currentY -= 20
 
+	// Blue bar
+	page.WriteString("q\n")
+	page.WriteString("0.204 0.596 0.859 rg\n")
+	page.WriteString(fmt.Sprintf("40 %f 532 25 re f\n", e.currentY-25))
+	page.WriteString("Q\n")
+
+	// White text
+	page.WriteString("BT\n")
+	page.WriteString("1 1 1 rg\n")  // White
+	page.WriteString("/F2 12 Tf\n") // Bold
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY-17))
+	page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(title)))
+	page.WriteString("ET\n")
+
+	e.currentY -= 35
+}
+
+// ============================================================
+// STATISTICS OVERVIEW (Colored boxes)
+// ============================================================
+func (e *PDFExporter) addStatisticsOverview(page *strings.Builder, report *Report) {
 	stats := []struct {
 		label string
-		value int
-		icon  string
-		color string
+		value string
+		color string // RGB in PDF format
 	}{
-		{"Total Cards", report.CardsFound, "\\u2726", "0.9 0.3 0.3"},
-		{"Affected Files", report.Statistics.FilesWithCards, "\\u25C6", "0.3 0.6 0.9"},
-		{"High Risk", report.Statistics.HighRiskFiles, "\\u26A0", "0.8 0.2 0.2"},
-		{"Medium Risk", report.Statistics.MediumRiskFiles, "\\u25B2", "0.9 0.6 0.2"},
-		{"Low Risk", report.Statistics.LowRiskFiles, "\\u25BC", "0.3 0.7 0.3"},
+		{"Total Cards Found", fmt.Sprintf("%d", report.CardsFound), "0.9 0.3 0.3"},               // Red
+		{"Files With Cards", fmt.Sprintf("%d", report.Statistics.FilesWithCards), "0.2 0.7 0.9"}, // Blue
+		{"High-Risk Files", fmt.Sprintf("%d", report.Statistics.HighRiskFiles), "0.8 0.2 0.2"},   // Dark red
 	}
 
 	x := 50.0
-	for i, stat := range stats {
-		if i == 3 {
-			x = 50.0
-			e.currentY -= 75
-		}
-
-		// Card with gradient effect
+	for _, stat := range stats {
+		// Colored box
 		page.WriteString("q\n")
 		page.WriteString(fmt.Sprintf("%s rg\n", stat.color))
-		page.WriteString(fmt.Sprintf("%f %f 100 65 re f\n", x, e.currentY-65))
-
-		// Top highlight
-		page.WriteString("1 1 1 rg\n")
-		page.WriteString("0.2 gs\n")
-		page.WriteString(fmt.Sprintf("%f %f 100 3 re f\n", x, e.currentY-3))
+		page.WriteString(fmt.Sprintf("%f %f 160 50 re f\n", x, e.currentY-50))
 		page.WriteString("Q\n")
 
-		// Icon
+		// White text - Value (large)
 		page.WriteString("BT\n")
 		page.WriteString("1 1 1 rg\n")
 		page.WriteString("/F2 20 Tf\n")
-		page.WriteString(fmt.Sprintf("%f %f Td\n", x+38, e.currentY-35))
-		page.WriteString(fmt.Sprintf("(%s) Tj\n", stat.icon))
+		page.WriteString(fmt.Sprintf("%f %f Td\n", x+10, e.currentY-30))
+		page.WriteString(fmt.Sprintf("(%s) Tj\n", stat.value))
 		page.WriteString("ET\n")
 
-		// Value
+		// White text - Label (small)
 		page.WriteString("BT\n")
 		page.WriteString("1 1 1 rg\n")
-		page.WriteString("/F2 18 Tf\n")
-		page.WriteString(fmt.Sprintf("%f %f Td\n", x+38, e.currentY-52))
-		page.WriteString(fmt.Sprintf("(%d) Tj\n", stat.value))
-		page.WriteString("ET\n")
-
-		// Label
-		page.WriteString("BT\n")
-		page.WriteString("1 1 1 rg\n")
-		page.WriteString("/F1 7 Tf\n")
-		page.WriteString(fmt.Sprintf("%f %f Td\n", x+25, e.currentY-62))
+		page.WriteString("/F1 9 Tf\n")
+		page.WriteString(fmt.Sprintf("%f %f Td\n", x+10, e.currentY-45))
 		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(stat.label)))
 		page.WriteString("ET\n")
 
-		x += 110
+		x += 175
 	}
 
-	e.currentY -= 75
+	e.currentY -= 70
 }
 
 // ============================================================
-// CARD DISTRIBUTION CHART (Visual bar chart)
+// CARD DISTRIBUTION (with visual bars)
 // ============================================================
-func (e *PDFExporter) addCardDistributionChart(page *strings.Builder, report *Report) {
-	e.currentY -= 20
+func (e *PDFExporter) addCardDistribution(page *strings.Builder, report *Report) {
+	e.currentY -= 15
 
 	// Title
 	page.WriteString("BT\n")
-	page.WriteString("0.2 0.2 0.2 rg\n")
-	page.WriteString("/F2 12 Tf\n")
+	page.WriteString("0 0 0 rg\n")
+	page.WriteString("/F2 11 Tf\n")
 	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
-	page.WriteString("(\\u25BA Card Distribution by Type) Tj\n")
+	page.WriteString("(Card Distribution by Type) Tj\n")
 	page.WriteString("ET\n")
 
 	e.currentY -= 25
 
-	// Sort cards
+	// Sort cards by count
 	type cardCount struct {
 		name  string
 		count int
@@ -494,6 +410,7 @@ func (e *PDFExporter) addCardDistributionChart(page *strings.Builder, report *Re
 	for name, count := range report.Statistics.CardsByType {
 		cards = append(cards, cardCount{name, count})
 	}
+	// Bubble sort
 	for i := 0; i < len(cards); i++ {
 		for j := i + 1; j < len(cards); j++ {
 			if cards[j].count > cards[i].count {
@@ -502,181 +419,54 @@ func (e *PDFExporter) addCardDistributionChart(page *strings.Builder, report *Re
 		}
 	}
 
-	// Card brand colors
-	brandColors := map[string]string{
-		"Visa":             "0.0 0.3 0.6",
-		"Mastercard":       "0.9 0.4 0.1",
-		"American Express": "0.0 0.5 0.7",
-		"Discover":         "0.9 0.5 0.1",
-		"JCB":              "0.0 0.4 0.3",
-	}
-
+	// Draw each card type with colored bar
 	maxCount := 0
 	if len(cards) > 0 {
 		maxCount = cards[0].count
 	}
 
 	for _, card := range cards {
-		// Card icon based on brand
-		icon := "\\u25C6"
-
-		// Card name with icon
+		// Card name
 		page.WriteString("BT\n")
-		page.WriteString("0.2 0.2 0.2 rg\n")
+		page.WriteString("0 0 0 rg\n")
 		page.WriteString("/F2 10 Tf\n")
 		page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
-		page.WriteString(fmt.Sprintf("(%s %s) Tj\n", icon, e.escape(card.name)))
+		page.WriteString(fmt.Sprintf("(%s:) Tj\n", e.escape(card.name)))
 		page.WriteString("ET\n")
 
 		// Count
 		page.WriteString("BT\n")
-		page.WriteString("0.4 0.4 0.4 rg\n")
-		page.WriteString("/F1 9 Tf\n")
+		page.WriteString("/F1 10 Tf\n")
 		page.WriteString(fmt.Sprintf("180 %f Td\n", e.currentY))
 		page.WriteString(fmt.Sprintf("(%d cards) Tj\n", card.count))
 		page.WriteString("ET\n")
 
-		// Percentage
-		percentage := 0.0
-		if report.CardsFound > 0 {
-			percentage = float64(card.count) / float64(report.CardsFound) * 100
-		}
-		page.WriteString("BT\n")
-		page.WriteString("0.5 0.5 0.5 rg\n")
-		page.WriteString("/F1 8 Tf\n")
-		page.WriteString(fmt.Sprintf("235 %f Td\n", e.currentY))
-		page.WriteString(fmt.Sprintf("(%.1f%%) Tj\n", percentage))
-		page.WriteString("ET\n")
-
-		// Visual bar
-		barWidth := 280.0
+		// Visual bar (blue)
+		barWidth := 250.0
 		if maxCount > 0 {
-			barWidth = (float64(card.count) / float64(maxCount)) * 280.0
+			barWidth = (float64(card.count) / float64(maxCount)) * 250.0
 		}
-
-		// Get color for this brand
-		color := "0.2 0.6 0.9"
-		if c, ok := brandColors[card.name]; ok {
-			color = c
-		}
-
-		// Bar background (light)
 		page.WriteString("q\n")
-		page.WriteString("0.95 0.95 0.95 rg\n")
-		page.WriteString(fmt.Sprintf("280 %f 280 12 re f\n", e.currentY-2))
-
-		// Bar foreground (colored)
-		page.WriteString(fmt.Sprintf("%s rg\n", color))
-		page.WriteString(fmt.Sprintf("280 %f %f 12 re f\n", e.currentY-2, barWidth))
-
-		// Bar border
-		page.WriteString("0.7 0.7 0.7 RG\n")
-		page.WriteString("0.5 w\n")
-		page.WriteString(fmt.Sprintf("280 %f 280 12 re S\n", e.currentY-2))
+		page.WriteString("0.204 0.596 0.859 rg\n")
+		page.WriteString(fmt.Sprintf("250 %f %f 12 re f\n", e.currentY-2, barWidth))
 		page.WriteString("Q\n")
 
 		e.currentY -= 20
 	}
-
-	e.currentY -= 10
 }
 
 // ============================================================
-// FILE TYPE DISTRIBUTION
+// TOP FILES
 // ============================================================
-func (e *PDFExporter) addFileTypeDistribution(page *strings.Builder, report *Report) {
-	if len(report.Statistics.FilesByType) == 0 {
-		return
-	}
-
-	// Title
-	page.WriteString("BT\n")
-	page.WriteString("0.2 0.2 0.2 rg\n")
-	page.WriteString("/F2 12 Tf\n")
-	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
-	page.WriteString("(\\u25BA File Type Distribution) Tj\n")
-	page.WriteString("ET\n")
-
-	e.currentY -= 20
-
-	// Sort file types
-	type fileCount struct {
-		ext   string
-		count int
-	}
-	var files []fileCount
-	for ext, count := range report.Statistics.FilesByType {
-		files = append(files, fileCount{ext, count})
-	}
-	for i := 0; i < len(files); i++ {
-		for j := i + 1; j < len(files); j++ {
-			if files[j].count > files[i].count {
-				files[i], files[j] = files[j], files[i]
-			}
-		}
-	}
-
-	// Show top 5
-	maxShow := 5
-	if len(files) < maxShow {
-		maxShow = len(files)
-	}
-
-	for i := 0; i < maxShow; i++ {
-		file := files[i]
-
-		page.WriteString("BT\n")
-		page.WriteString("0.3 0.3 0.3 rg\n")
-		page.WriteString("/F4 9 Tf\n") // Courier for extensions
-		page.WriteString(fmt.Sprintf("60 %f Td\n", e.currentY))
-		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(file.ext)))
-		page.WriteString("ET\n")
-
-		page.WriteString("BT\n")
-		page.WriteString("0.5 0.5 0.5 rg\n")
-		page.WriteString("/F1 9 Tf\n")
-		page.WriteString(fmt.Sprintf("150 %f Td\n", e.currentY))
-		page.WriteString(fmt.Sprintf("(%d files) Tj\n", file.count))
-		page.WriteString("ET\n")
-
-		e.currentY -= 15
-	}
-
-	e.currentY -= 10
-}
-
-// ============================================================
-// SECTION HEADER (Styled)
-// ============================================================
-func (e *PDFExporter) addStatsHeader(page *strings.Builder, title string) {
-	e.currentY -= 15
-
-	// Blue bar with gradient effect
-	page.WriteString("q\n")
-	page.WriteString("0.2 0.6 0.9 rg\n")
-	page.WriteString(fmt.Sprintf("30 %f 552 30 re f\n", e.currentY-30))
-
-	// Lighter overlay
-	page.WriteString("0.3 0.7 1.0 rg\n")
-	page.WriteString(fmt.Sprintf("30 %f 552 3 re f\n", e.currentY-3))
-	page.WriteString("Q\n")
-
-	// Title (white, with icon)
-	page.WriteString("BT\n")
-	page.WriteString("1 1 1 rg\n")
-	page.WriteString("/F2 13 Tf\n")
-	page.WriteString(fmt.Sprintf("40 %f Td\n", e.currentY-20))
-	page.WriteString(fmt.Sprintf("(\\u25BA %s) Tj\n", e.escape(title)))
-	page.WriteString("ET\n")
-
-	e.currentY -= 40
-}
-
-// ============================================================
-// TOP FILES DETAILED (With risk badges)
-// ============================================================
-func (e *PDFExporter) addTopFilesDetailed(page *strings.Builder, report *Report) {
+func (e *PDFExporter) addTopFiles(page *strings.Builder, report *Report) {
 	if len(report.Statistics.TopFiles) == 0 {
+		page.WriteString("BT\n")
+		page.WriteString("0 0 0 rg\n")
+		page.WriteString("/F3 10 Tf\n") // Italic
+		page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
+		page.WriteString("(No files with cards found.) Tj\n")
+		page.WriteString("ET\n")
+		e.currentY -= 30
 		return
 	}
 
@@ -688,147 +478,84 @@ func (e *PDFExporter) addTopFilesDetailed(page *strings.Builder, report *Report)
 	for i := 0; i < maxFiles; i++ {
 		fs := report.Statistics.TopFiles[i]
 
-		// Risk badge
-		riskLevel := "LOW"
-		riskColor := "0.3 0.7 0.3"
-		riskIcon := "\\u25BC"
+		// Risk indicator (colored circle)
+		color := "0.2 0.8 0.2" // Green
 		if fs.CardCount >= 5 {
-			riskLevel = "HIGH"
-			riskColor = "0.9 0.2 0.2"
-			riskIcon = "\\u26A0"
+			color = "0.9 0.2 0.2" // Red
 		} else if fs.CardCount >= 2 {
-			riskLevel = "MED"
-			riskColor = "0.9 0.6 0.2"
-			riskIcon = "\\u25B2"
+			color = "0.9 0.7 0.2" // Yellow
 		}
 
-		// File box
+		// Draw circle
 		page.WriteString("q\n")
-		page.WriteString("0.98 0.98 0.98 rg\n")
-		page.WriteString(fmt.Sprintf("50 %f 512 45 re f\n", e.currentY-45))
-
-		// Left colored stripe
-		page.WriteString(fmt.Sprintf("%s rg\n", riskColor))
-		page.WriteString(fmt.Sprintf("50 %f 5 45 re f\n", e.currentY-45))
-
-		// Border
-		page.WriteString("0.8 0.8 0.8 RG\n")
-		page.WriteString("0.5 w\n")
-		page.WriteString(fmt.Sprintf("50 %f 512 45 re S\n", e.currentY-45))
+		page.WriteString(fmt.Sprintf("%s rg\n", color))
+		page.WriteString(fmt.Sprintf("50 %f 5 0 360 arc f\n", e.currentY-3))
 		page.WriteString("Q\n")
 
-		// Risk badge (top right)
-		page.WriteString("q\n")
-		page.WriteString(fmt.Sprintf("%s rg\n", riskColor))
-		page.WriteString(fmt.Sprintf("520 %f 35 16 re f\n", e.currentY-15))
-		page.WriteString("Q\n")
-
+		// File number and name
 		page.WriteString("BT\n")
-		page.WriteString("1 1 1 rg\n")
-		page.WriteString("/F2 7 Tf\n")
-		page.WriteString(fmt.Sprintf("525 %f Td\n", e.currentY-11))
-		page.WriteString(fmt.Sprintf("(%s %s) Tj\n", riskIcon, riskLevel))
-		page.WriteString("ET\n")
-
-		// File number and icon
-		page.WriteString("BT\n")
-		page.WriteString(fmt.Sprintf("%s rg\n", riskColor))
-		page.WriteString("/F2 11 Tf\n")
-		page.WriteString(fmt.Sprintf("63 %f Td\n", e.currentY-17))
-		page.WriteString(fmt.Sprintf("(%d. \\u25C6) Tj\n", i+1))
-		page.WriteString("ET\n")
-
-		// Filename
-		page.WriteString("BT\n")
-		page.WriteString("0.2 0.2 0.2 rg\n")
+		page.WriteString("0 0 0 rg\n")
 		page.WriteString("/F2 10 Tf\n")
-		page.WriteString(fmt.Sprintf("90 %f Td\n", e.currentY-17))
-		page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(e.truncate(fs.FilePath, 45))))
+		page.WriteString(fmt.Sprintf("65 %f Td\n", e.currentY))
+		page.WriteString(fmt.Sprintf("(%d. %s) Tj\n", i+1, e.escape(e.truncate(fs.FilePath, 55))))
 		page.WriteString("ET\n")
 
-		// Details
+		// Card count (right aligned)
 		page.WriteString("BT\n")
-		page.WriteString("0.5 0.5 0.5 rg\n")
-		page.WriteString("/F1 8 Tf\n")
-		page.WriteString(fmt.Sprintf("90 %f Td\n", e.currentY-33))
-		page.WriteString(fmt.Sprintf("(Cards: %d) Tj\n", fs.CardCount))
+		page.WriteString("/F1 10 Tf\n")
+		page.WriteString(fmt.Sprintf("520 %f Td\n", e.currentY))
+		page.WriteString(fmt.Sprintf("(%d cards) Tj\n", fs.CardCount))
 		page.WriteString("ET\n")
 
-		e.currentY -= 52
+		e.currentY -= 18
 	}
+
+	e.currentY -= 10
 }
 
 // ============================================================
-// FILE CARD (Individual file details)
+// FILE FINDINGS (Detailed)
 // ============================================================
-func (e *PDFExporter) addFileCard(page *strings.Builder, filePath string, findingsCount int, index int, report *Report) {
-	// Card background
+// Note: We don't need to know the Finding structure details
+// We only need to count them, so we use interface{} for flexibility
+func (e *PDFExporter) addFileFindings(page *strings.Builder, filePath string, findingsCount int, index int) {
+	// Gray box background
 	page.WriteString("q\n")
-	page.WriteString("0.96 0.96 0.96 rg\n")
-	page.WriteString(fmt.Sprintf("50 %f 512 35 re f\n", e.currentY-35))
-
-	// Border
-	page.WriteString("0.7 0.7 0.7 RG\n")
-	page.WriteString("0.5 w\n")
-	page.WriteString(fmt.Sprintf("50 %f 512 35 re S\n", e.currentY-35))
+	page.WriteString("0.95 0.95 0.95 rg\n")
+	page.WriteString(fmt.Sprintf("40 %f 532 30 re f\n", e.currentY-30))
 	page.WriteString("Q\n")
 
-	// File number
+	// File number and path
 	page.WriteString("BT\n")
-	page.WriteString("0.2 0.6 0.9 rg\n")
+	page.WriteString("0 0 0 rg\n")
 	page.WriteString("/F2 10 Tf\n")
-	page.WriteString(fmt.Sprintf("60 %f Td\n", e.currentY-20))
-	page.WriteString(fmt.Sprintf("(File %d:) Tj\n", index+1))
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY-18))
+	page.WriteString(fmt.Sprintf("(File %d: %s) Tj\n", index+1, e.escape(e.truncate(filePath, 70))))
 	page.WriteString("ET\n")
 
-	// Filename
+	e.currentY -= 40
+
+	// Cards count
 	page.WriteString("BT\n")
-	page.WriteString("0.2 0.2 0.2 rg\n")
+	page.WriteString("0.3 0.3 0.3 rg\n")
 	page.WriteString("/F1 9 Tf\n")
-	page.WriteString(fmt.Sprintf("100 %f Td\n", e.currentY-20))
-	page.WriteString(fmt.Sprintf("(%s) Tj\n", e.escape(e.truncate(filePath, 55))))
+	page.WriteString(fmt.Sprintf("50 %f Td\n", e.currentY))
+	page.WriteString(fmt.Sprintf("(Cards found: %d) Tj\n", findingsCount))
 	page.WriteString("ET\n")
 
-	// Card count
-	page.WriteString("BT\n")
-	page.WriteString("0.5 0.5 0.5 rg\n")
-	page.WriteString("/F1 8 Tf\n")
-	page.WriteString(fmt.Sprintf("460 %f Td\n", e.currentY-20))
-	page.WriteString(fmt.Sprintf("(Cards: %d) Tj\n", findingsCount))
-	page.WriteString("ET\n")
-
-	e.currentY -= 42
+	e.currentY -= 25
 }
 
 // ============================================================
-// FINAL FOOTER
+// FOOTER
 // ============================================================
-func (e *PDFExporter) addFinalFooter(page *strings.Builder) {
+func (e *PDFExporter) addFooter(page *strings.Builder) {
 	page.WriteString("BT\n")
-	page.WriteString("0.4 0.4 0.4 rg\n")
-	page.WriteString("/F3 9 Tf\n")
-	page.WriteString("50 60 Td\n")
+	page.WriteString("0.5 0.5 0.5 rg\n") // Gray
+	page.WriteString("/F3 8 Tf\n")       // Italic, small
+	page.WriteString(fmt.Sprintf("50 30 Td\n"))
 	page.WriteString(fmt.Sprintf("(Generated: %s) Tj\n",
 		e.escape(time.Now().Format("January 2, 2006 at 3:04 PM MST"))))
-	page.WriteString("ET\n")
-
-	page.WriteString("BT\n")
-	page.WriteString("0.6 0.6 0.6 rg\n")
-	page.WriteString("/F1 8 Tf\n")
-	page.WriteString("50 48 Td\n")
-	page.WriteString("(\\u25C6 BasicPanScanner - Professional Security Assessment Tool) Tj\n")
-	page.WriteString("ET\n")
-}
-
-// ============================================================
-// PAGE NUMBER
-// ============================================================
-func (e *PDFExporter) addPageNumber(page *strings.Builder, pageNum int) {
-	page.WriteString("BT\n")
-	page.WriteString("0.5 0.5 0.5 rg\n")
-	page.WriteString("/F1 9 Tf\n")
-	page.WriteString("540 30 Td\n")
-	page.WriteString(fmt.Sprintf("(Page %d) Tj\n", pageNum))
 	page.WriteString("ET\n")
 }
 
