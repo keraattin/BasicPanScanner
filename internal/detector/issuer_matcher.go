@@ -13,7 +13,7 @@
 //	❌ Code changes required for every new card type
 //	❌ Manual priority management in overlaps
 //
-// v3.1.1 (Current Method - BIN Database Only):
+// v3.0.0 (Current Method - BIN Database Only):
 //
 //	✅ JSON-based BIN database (REQUIRED)
 //	✅ 6-digit BIN matching (more accurate)
