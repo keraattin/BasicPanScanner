@@ -7,7 +7,7 @@
 **A production-ready, high-performance Go tool for detecting credit card numbers in files**  
 Built for PCI DSS compliance, security audits, and enterprise data discovery
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Examples](#-examples) • [Contributing](#-contributing)
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Examples](#-examples)
 
 </div>
 
@@ -30,8 +30,6 @@ Built for PCI DSS compliance, security audits, and enterprise data discovery
 - [Security Notice](#-security-notice)
 - [Examples](#-examples)
 - [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
 - [Acknowledgments](#-acknowledgments)
 
 ---
