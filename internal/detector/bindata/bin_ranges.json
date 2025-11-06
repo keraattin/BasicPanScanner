@@ -1,7 +1,7 @@
 {
-  "_comment": "BasicPanScanner BIN Database v3.1",
+  "_comment": "BasicPanScanner BIN Database v3.0",
   "_info": {
-    "version": "3.1.3",
+    "version": "3.0.0",
     "last_updated": "2025-10-23",
     "description": "Comprehensive BIN (Bank Identification Number) database for accurate card detection",
     "sources": [
