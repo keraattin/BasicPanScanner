@@ -58,6 +58,10 @@ Built for PCI DSS compliance, security audits, and enterprise data discovery
 - 🔄 **Migration Safety** - Verify no PANs leaked during data transfers
 - 📊 **Risk Assessment** - Quantify PAN exposure with detailed reports
 
+
+<img width="1142" height="1140" alt="image" src="https://github.com/user-attachments/assets/89cc6f3b-aed6-4c51-9651-867aee707e4b" />
+
+
 ---
 
 ## ✨ Key Features
