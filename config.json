@@ -1,5 +1,6 @@
 {
   "_comment": "BasicPanScanner Configuration v3.0",
+  "_version": "3.0.0",
   "_info": {
     "scan_mode": "Controls which files to scan based on extensions",
     "modes": {
